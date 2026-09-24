@@ -1,0 +1,126 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/time_hud.gd" id="1_time_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+bg_color = Color(0.0784314, 0.0901961, 0.141176, 0.882353)
+border_width_bottom = 2
+border_color = Color(0.2, 0.25098, 0.352941, 0.901961)
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_bg"]
+bg_color = Color(0.15, 0.18, 0.25, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill"]
+bg_color = Color(0.3, 0.7, 1, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="TimeHUD" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_time_hud")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 52.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_hud")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="LeftBox" type="HBoxContainer" parent="TopBar/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DayLabel" type="Label" parent="TopBar/HBoxContainer/LeftBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "第 1 天"
+
+[node name="PeriodLabel" type="Label" parent="TopBar/HBoxContainer/LeftBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "清晨"
+
+[node name="ClockLabel" type="Label" parent="TopBar/HBoxContainer/LeftBox"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "00:00"
+
+[node name="TimeProgressBar" type="ProgressBar" parent="TopBar/HBoxContainer/LeftBox"]
+custom_minimum_size = Vector2(90, 10)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill")
+max_value = 1.0
+show_percentage = false
+
+[node name="CenterBox" type="HBoxContainer" parent="TopBar/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 24
+
+[node name="NavStatusLabel" type="Label" parent="TopBar/HBoxContainer/CenterBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "導航: 準備中"
+
+[node name="NpcStatusLabel" type="Label" parent="TopBar/HBoxContainer/CenterBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 1, 0.65, 1)
+theme_override_font_sizes/font_size = 13
+text = "NPC_1: 待機中"
+
+[node name="RightBox" type="HBoxContainer" parent="TopBar/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PauseButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "⏸ 暫停"
+
+[node name="Speed1xButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "1x"
+
+[node name="Speed2xButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "2x"
+
+[node name="Speed4xButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "4x"
+
+[node name="FFHourButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "+1h"
+
+[node name="FFMidnightButton" type="Button" parent="TopBar/HBoxContainer/RightBox"]
+layout_mode = 2
+focus_mode = 0
+text = "🌙午夜"
+

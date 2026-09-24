@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://dnwww57uc8xd2"]
+
+[ext_resource type="PackedScene" uid="uid://66fvualfrb68" path="res://scene/map.tscn" id="1_itxqv"]
+[ext_resource type="PackedScene" path="res://scene/ui/time_hud.tscn" id="2_v0l8b"]
+[ext_resource type="PackedScene" path="res://scene/camera/game_camera.tscn" id="2_wp4xf"]
+
+[node name="Main" type="Node" unique_id=1080499384]
+
+[node name="Map" parent="." unique_id=692304682 instance=ExtResource("1_itxqv")]
+
+[node name="GameCamera" parent="." unique_id=2015487369 instance=ExtResource("2_wp4xf")]
+
+[node name="TimeHUD" parent="." unique_id=723845343 instance=ExtResource("2_v0l8b")]
