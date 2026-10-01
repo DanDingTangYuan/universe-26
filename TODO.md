@@ -65,24 +65,24 @@
 
 > 目標：廢除 `demo.gd` 中針對單一展示場景的硬編碼演出，為 NPC 打造具備獨立狀態與生命週期的實體架構。
 
-- [ ] **2.1 NPC 屬性與資料模型 (`NPCData.gd` / `AgentStats.gd`)**
-  - [ ] 封裝神經網路所需的 15 個特徵欄位（HP, Health, Stamina, Hunger, SocialDesire, Mood, JobId, 金錢, 以及 7 類物資）。
-  - [ ] 實作數值自然隨時間衰減與恢復（如飢餓隨 Tick 上升、體力隨移動下降）。
-  - [ ] 實作方法將屬性匯出為 `PackedFloat32Array`（長度 15），便於直接交給 C# 模型推論。
+- [x] **2.1 NPC 屬性與資料模型 (`NPCData.gd` / `AgentStats.gd`)**
+  - [x] 封裝神經網路所需的 15 個特徵欄位（HP, Health, Stamina, Hunger, SocialDesire, Mood, JobId, 金錢, 以及 7 類物資）。
+  - [x] 實作數值自然隨時間衰減與恢復（如飢餓隨 Tick 上升、體力隨移動下降）。
+  - [x] 實作方法將屬性匯出為 `PackedFloat32Array`（長度 15），便於直接交給 C# 模型推論。
 
-- [ ] **2.2 NPC 控制器 (`NPCController.gd`)**
-  - [ ] 繼承 `CharacterBody2D`，作為 NPC 預製體的控制核心（_提示：場景節點綁定由使用者在 Editor 操作，遵守場景保護規則_）。
-  - [ ] 實作輕量級狀態機 (FSM)：
+- [x] **2.2 NPC 控制器 (`NPCController.gd`)**
+  - [x] 繼承 `CharacterBody2D`，作為 NPC 預製體的控制核心（_提示：場景節點綁定由使用者在 Editor 操作，遵守場景保護規則_）。
+  - [x] 實作輕量級狀態機 (FSM)：
     - `IDLE`：待機、眼神/朝向維持、播放動畫並鎖定在第 0 幀。
     - `MOVING`：沿 A\* 網格路徑平滑移動。
     - `INTERACTING`：社交交流、對話氣泡顯示。
     - `WORKING`：農作、巡田、販售等特定工作。
     - `RESTING`：就診、回家睡覺休養。
-  - [ ] 移植並優化 `demo.gd` 中的平滑位移：
+  - [x] 移植並優化 `demo.gd` 中的平滑位移：
     - 使用 `Tween` 處理逐格移動，移動中依據位移向量切換 `walk_up/down/left/right` 動畫。
     - 移動完成或停止時，調用 `pause()` 與 `frame = 0` 確保精確定格。
-  - [ ] 實作 `PerceptionArea`（`Area2D`）訊號監聽，感知周遭 NPC 或物體。
-  - [ ] 於 `API_REFERENCE.md` 登錄公開介面。
+  - [x] 實作 `PerceptionArea`（`Area2D`）訊號監聽，感知周遭 NPC 或物體。
+  - [x] 於 `API_REFERENCE.md` 登錄公開介面。
 
 ---
 
@@ -111,9 +111,11 @@
 
 > 目標：建立完整的沙盒生態閉環，讓 NPC 在地圖中自發性運作。
 
-- [ ] **4.1 地圖設施與興趣點系統 (POIs / World Anchors)**
-  - [ ] 建立地圖設施註冊表（對應 `NPCDecision.GetLocation` 中的 ID：如 12:市場, 13:餐廳, 16:農田, 18:醫院, 19:圖書館, 20:社交廣場, 21:住宅）。
-  - [ ] NPC 根據決策目標查詢 POI 網格座標，並呼叫 `NavigationManager` 進行路徑規劃。
+- [x] **4.1 地圖設施與興趣點系統 (POIs / World Anchors & NPC Templates)**
+  - [x] 建立地圖設施註冊表 `data/poi_locations.json`（對齊 Google 試算表 22 個 POI：住宅 1~11、商店 12、餐廳 13、伐木場 14、礦場 15、農田 16、釣魚場 17、醫院 18、圖書館 19、社交廣場 20、回家 21）。
+  - [x] 建立 20 位居民配置模板 `data/npc_templates.json`（涵蓋 9 大職業、排程、住址、工作點、15 維初始數值與造型素材）。
+  - [x] 實作 `NPCSpawner.gd` 生成工廠，支援動態 4 向切圖換皮、`NPCData` 獨立注入與全域註冊。
+  - [x] NPC 根據決策目標查詢 POI 網格座標，並呼叫 `NavigationManager` 進行路徑規劃。
 
 - [ ] **4.2 整合除錯與觀測 (Debug & Inspector)**
   - [ ] 建立除錯視覺化（可選）：顯示 NPC 當前狀態、AI 輸出前三高機率、A\* 規劃路徑線條。

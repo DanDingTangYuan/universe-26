@@ -3,6 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://66fvualfrb68" path="res://scene/map.tscn" id="1_itxqv"]
 [ext_resource type="PackedScene" path="res://scene/ui/time_hud.tscn" id="2_v0l8b"]
 [ext_resource type="PackedScene" path="res://scene/camera/game_camera.tscn" id="2_wp4xf"]
+[ext_resource type="Script" uid="uid://ux5dwflbty38" path="res://scripts/entities/npc_spawner.gd" id="4_brvut"]
 
 [node name="Main" type="Node" unique_id=1080499384]
 
@@ -11,3 +12,6 @@
 [node name="GameCamera" parent="." unique_id=2015487369 instance=ExtResource("2_wp4xf")]
 
 [node name="TimeHUD" parent="." unique_id=723845343 instance=ExtResource("2_v0l8b")]
+
+[node name="NPCSpawner" type="Node2D" parent="." unique_id=1955142343]
+script = ExtResource("4_brvut")

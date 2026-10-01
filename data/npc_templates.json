@@ -1,0 +1,262 @@
+[
+  {
+    "id": "npc_01",
+    "name": "Alex",
+    "job_id": 1,
+    "job_name": "礦工",
+    "home_poi_id": 1,
+    "work_poi_id": 15,
+    "sprite_texture": "res://assets/img/spr_alex.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 50.0, "mood": 80.0,
+      "money": 100, "stone": 3, "mineral": 1, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_02",
+    "name": "Bob",
+    "job_id": 1,
+    "job_name": "礦工",
+    "home_poi_id": 2,
+    "work_poi_id": 15,
+    "sprite_texture": "res://assets/img/spr_ardley.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 55.0, "mood": 75.0,
+      "money": 120, "stone": 2, "mineral": 1
+    }
+  },
+  {
+    "id": "npc_03",
+    "name": "Clara",
+    "job_id": 2,
+    "job_name": "圖書管理員",
+    "home_poi_id": 3,
+    "work_poi_id": 19,
+    "sprite_texture": "res://assets/img/spr_ester.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 90.0, "hunger": 80.0, "social_desire": 70.0, "mood": 85.0,
+      "money": 150, "food": 1
+    }
+  },
+  {
+    "id": "npc_04",
+    "name": "David",
+    "job_id": 2,
+    "job_name": "圖書管理員",
+    "home_poi_id": 4,
+    "work_poi_id": 19,
+    "sprite_texture": "res://assets/img/spr_tom.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 95.0, "hunger": 75.0, "social_desire": 65.0, "mood": 80.0,
+      "money": 130, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_05",
+    "name": "Elena",
+    "job_id": 3,
+    "job_name": "漁夫",
+    "home_poi_id": 5,
+    "work_poi_id": 17,
+    "sprite_texture": "res://assets/img/spr_anna.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 60.0, "mood": 80.0,
+      "money": 90, "fish": 3
+    }
+  },
+  {
+    "id": "npc_06",
+    "name": "Frank",
+    "job_id": 3,
+    "job_name": "漁夫",
+    "home_poi_id": 5,
+    "work_poi_id": 17,
+    "sprite_texture": "res://assets/img/spr_colt.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 50.0, "mood": 75.0,
+      "money": 110, "fish": 2, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_07",
+    "name": "Grace",
+    "job_id": 4,
+    "job_name": "餐廳員工",
+    "home_poi_id": 6,
+    "work_poi_id": 13,
+    "sprite_texture": "res://assets/img/spr_ester.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 95.0, "hunger": 90.0, "social_desire": 75.0, "mood": 85.0,
+      "money": 180, "food": 2, "lunchbox": 2
+    }
+  },
+  {
+    "id": "npc_08",
+    "name": "Henry",
+    "job_id": 4,
+    "job_name": "餐廳員工",
+    "home_poi_id": 7,
+    "work_poi_id": 13,
+    "sprite_texture": "res://assets/img/spr_alex.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 70.0, "mood": 80.0,
+      "money": 160, "food": 3
+    }
+  },
+  {
+    "id": "npc_09",
+    "name": "Ivy",
+    "job_id": 5,
+    "job_name": "醫護人員",
+    "home_poi_id": 8,
+    "work_poi_id": 18,
+    "sprite_texture": "res://assets/img/spr_anna.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 95.0, "hunger": 80.0, "social_desire": 65.0, "mood": 85.0,
+      "money": 200, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_10",
+    "name": "Jack",
+    "job_id": 5,
+    "job_name": "醫護人員",
+    "home_poi_id": 9,
+    "work_poi_id": 18,
+    "sprite_texture": "res://assets/img/spr_ardley.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 75.0, "social_desire": 60.0, "mood": 80.0,
+      "money": 190, "food": 1
+    }
+  },
+  {
+    "id": "npc_11",
+    "name": "Kelly",
+    "job_id": 6,
+    "job_name": "伐木工",
+    "home_poi_id": 10,
+    "work_poi_id": 14,
+    "sprite_texture": "res://assets/img/spr_tom.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 55.0, "mood": 75.0,
+      "money": 110, "wood": 4
+    }
+  },
+  {
+    "id": "npc_12",
+    "name": "Leo",
+    "job_id": 6,
+    "job_name": "伐木工",
+    "home_poi_id": 10,
+    "work_poi_id": 14,
+    "sprite_texture": "res://assets/img/spr_colt.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 50.0, "mood": 80.0,
+      "money": 100, "wood": 5, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_13",
+    "name": "Mia",
+    "job_id": 7,
+    "job_name": "農民",
+    "home_poi_id": 11,
+    "work_poi_id": 16,
+    "sprite_texture": "res://assets/img/spr_ester.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 65.0, "mood": 85.0,
+      "money": 100, "crops": 4, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_14",
+    "name": "Noah",
+    "job_id": 7,
+    "job_name": "農民",
+    "home_poi_id": 11,
+    "work_poi_id": 16,
+    "sprite_texture": "res://assets/img/spr_alex.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 60.0, "mood": 80.0,
+      "money": 90, "crops": 5
+    }
+  },
+  {
+    "id": "npc_15",
+    "name": "Olivia",
+    "job_id": 8,
+    "job_name": "商店店長",
+    "home_poi_id": 12,
+    "work_poi_id": 12,
+    "sprite_texture": "res://assets/img/spr_anna.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 70.0, "mood": 85.0,
+      "money": 500, "food": 2, "lunchbox": 2
+    }
+  },
+  {
+    "id": "npc_16",
+    "name": "Peter",
+    "job_id": 9,
+    "job_name": "家庭主夫",
+    "home_poi_id": 2,
+    "work_poi_id": 0,
+    "sprite_texture": "res://assets/img/spr_ardley.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 80.0, "mood": 80.0,
+      "money": 200, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_17",
+    "name": "Quinn",
+    "job_id": 9,
+    "job_name": "家庭主婦",
+    "home_poi_id": 3,
+    "work_poi_id": 0,
+    "sprite_texture": "res://assets/img/spr_colt.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 75.0, "mood": 85.0,
+      "money": 220, "food": 1
+    }
+  },
+  {
+    "id": "npc_18",
+    "name": "Ruby",
+    "job_id": 9,
+    "job_name": "家庭主婦",
+    "home_poi_id": 4,
+    "work_poi_id": 0,
+    "sprite_texture": "res://assets/img/spr_ester.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 80.0, "social_desire": 80.0, "mood": 80.0,
+      "money": 190, "lunchbox": 1
+    }
+  },
+  {
+    "id": "npc_19",
+    "name": "Sam",
+    "job_id": 9,
+    "job_name": "家庭主夫",
+    "home_poi_id": 6,
+    "work_poi_id": 0,
+    "sprite_texture": "res://assets/img/spr_tom.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 75.0, "social_desire": 70.0, "mood": 75.0,
+      "money": 210, "food": 1
+    }
+  },
+  {
+    "id": "npc_20",
+    "name": "Tina",
+    "job_id": 9,
+    "job_name": "家庭主婦",
+    "home_poi_id": 7,
+    "work_poi_id": 0,
+    "sprite_texture": "res://assets/img/spr_anna.png",
+    "initial_stats": {
+      "hp": 100.0, "health": 100.0, "stamina": 100.0, "hunger": 85.0, "social_desire": 85.0, "mood": 85.0,
+      "money": 250, "lunchbox": 1
+    }
+  }
+]

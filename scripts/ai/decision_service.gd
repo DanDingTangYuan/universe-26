@@ -66,12 +66,32 @@ var _layers_weights: Array[Array] = [] # Array[Array[PackedFloat32Array]]
 var _layers_biases: Array[PackedFloat32Array] = []
 var _layers_activations: Array[String] = []
 
+## C# ONNX 橋接器與模式標記
+var _csharp_bridge: RefCounted = null
+var _use_csharp_onnx: bool = false
+
 # ------------------------------------------------------------------------------
 # 3. 初始化與權重載入 (Initialization & Weight Loading)
 # ------------------------------------------------------------------------------
 
 func _init() -> void:
-	load_model()
+	_try_init_csharp_bridge()
+	if not _use_csharp_onnx:
+		load_model()
+
+## 嘗試初始化 C# ONNX 橋接引擎
+func _try_init_csharp_bridge() -> void:
+	if ResourceLoader.exists("res://ai_models/NPCDecisionBridge.cs"):
+		var bridge_class = load("res://ai_models/NPCDecisionBridge.cs")
+		if bridge_class != null:
+			var inst = bridge_class.new()
+			if inst != null and inst.has_method("Initialize"):
+				if inst.Initialize("res://ai_models/npc_decision_mlp.onnx", "res://ai_models/npc_normalization.json"):
+					_csharp_bridge = inst
+					_use_csharp_onnx = true
+					print("[NPCDecisionService] 成功啟用原生 C# ONNX Runtime (Microsoft.ML.OnnxRuntime) 推論引擎！")
+					return
+	print("[NPCDecisionService] 使用原生 GDScript 神經網路權重引擎。")
 
 ## 載入神經網路權重配置
 func load_model(path: String = WEIGHTS_PATH) -> bool:
@@ -155,13 +175,28 @@ func load_model(path: String = WEIGHTS_PATH) -> bool:
 
 ## 輸入 15 個原始特徵，回傳 9 種行為的機率分佈 (0.0 ~ 1.0)
 func forward(stats: PackedFloat32Array, personality_offset: PackedFloat32Array = PackedFloat32Array()) -> PackedFloat32Array:
-	if not _is_loaded:
-		if not load_model():
-			return PackedFloat32Array()
-
 	if stats.size() < 15:
 		printerr("[NPCDecisionService] 輸入特徵維度不足 15！目前大小: ", stats.size())
 		return PackedFloat32Array()
+
+	# 1. 優先使用 C# ONNX Runtime 引擎 (若已成功加載)
+	if _use_csharp_onnx and _csharp_bridge != null:
+		var input_stats: PackedFloat32Array = stats.duplicate()
+		if not personality_offset.is_empty():
+			var count: int = mini(input_stats.size(), personality_offset.size())
+			for i in range(count):
+				input_stats[i] += personality_offset[i]
+		var raw_scores = _csharp_bridge.Evaluate(input_stats)
+		var result: PackedFloat32Array = PackedFloat32Array()
+		result.resize(raw_scores.size())
+		for i in range(raw_scores.size()):
+			result[i] = float(raw_scores[i])
+		return result
+
+	# 2. 備用：原生 GDScript 前向推論
+	if not _is_loaded:
+		if not load_model():
+			return PackedFloat32Array()
 
 	# 1. 特徵標準化：(x - mean) / std + 詞條偏移量
 	var current: PackedFloat32Array = PackedFloat32Array()

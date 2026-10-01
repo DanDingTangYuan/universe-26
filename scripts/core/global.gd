@@ -104,8 +104,8 @@ signal npc_action_completed(npc_id: String, action: ActionType)
 ## 當前遊戲天數 (從第 1 天開始)
 var current_day: int = 1
 
-## 當前當日累積 Tick (0 ~ 1439)
-var current_tick: int = 0
+## 當前當日累積 Tick (0 ~ 1439，預設 480 為上午 08:00 晨間活動開始)
+var current_tick: int = 480
 
 ## 時間流速倍率 (1.0 = 正常, 2.0 = 雙倍速, 0.0 或暫停 = 不推進)
 var time_scale: float = 1.0

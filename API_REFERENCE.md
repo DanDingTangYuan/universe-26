@@ -29,6 +29,16 @@
   - [5.1 職責與特性](#51-職責與特性)
   - [5.2 核心常數與排程表](#52-核心常數與排程表)
   - [5.3 公開方法 (Public Methods)](#53-公開方法-public-methods)
+- [6. NPC 數據模型：NPCData (scripts/entities/npc_data.gd)](#6-npc-數據模型npcdata-scriptsentitiesnpc_datagd)
+  - [6.1 職責與架構](#61-職責與架構)
+  - [6.2 15 維度神經特徵清單](#62-15-維度神經特徵清單)
+  - [6.3 訊號 (Signals)](#63-訊號-signals)
+  - [6.4 公開方法 (Public Methods)](#64-公開方法-public-methods)
+- [7. NPC 控制器：NPCController (scripts/entities/npc_controller.gd)](#7-npc-控制器npccontroller-scriptsentitiesnpc_controllergd)
+  - [7.1 職責與狀態機 (FSM)](#71-職責與狀態機-fsm)
+  - [7.2 匯出參數 (Exports)](#72-匯出參數-exports)
+  - [7.3 訊號 (Signals)](#73-訊號-signals)
+  - [7.4 公開方法 (Public Methods)](#74-公開方法-public-methods)
 
 ---
 
@@ -360,7 +370,9 @@ enum LocationType {
 
 ### 5.1 職責與特性
 
-- **純 GDScript 原生推論**：讀取 `res://ai_models/npc_weights.json`（由 ONNX 模型提取的 19,977 浮點權重與標準化數據），完全不依賴 C# / .NET / ONNX Runtime C++ DLL，單次推論僅需約 0.03 毫秒。
+- **雙引擎無縫切換 (C# ONNX Runtime / GDScript Fallback)**：
+  - **C# ONNX 引擎**（`ai_models/NPCDecisionBridge.cs`）：在 Godot Mono (.NET) 環境下，透過 `Microsoft.ML.OnnxRuntime` 直接讀取原生的 `res://ai_models/npc_decision_mlp.onnx` 二進位神經網路模型與 `npc_normalization.json`，進行硬體加速的高精度模型推論。
+  - **GDScript 引擎**（`scripts/ai/decision_service.gd`）：在 Godot Standard（非 Mono）環境下，自動無縫降級使用原生 GDScript 矩陣運算，讀取 `res://ai_models/npc_weights.json`。
 - **神經符號雙重決策 (Hybrid)**：
   - **規則層 (Rule-based)**：優先判斷關鍵作息（23:00 宵禁強行返家、12:00 午餐時間找食物或原地吃便當、上班時段依體力/健康判定出勤）。
   - **神經層 (Neural Model)**：無規則干預時，透過神經網路依據 15 維度生理狀態與個性詞條偏移量輸出 9 種行為分數（0.0 ~ 1.0）。
@@ -435,3 +447,203 @@ enum LocationType {
 #### `is_available_for_social(current_action: int, is_at_home: bool = false) -> bool`
 
 - **說明**：判斷該 NPC 當前是否處於可進行社交互動的狀態（若正在工作、就醫、閱讀、在家休息則回傳 `false`）。
+
+---
+
+## 6. NPC 數據模型：NPCData (`scripts/entities/npc_data.gd`)
+
+繼承自 `Resource` 的獨立個體數據模型，封裝 15 維度神經特徵向量、隨時間自然代謝模擬、物品庫存、動態修飾器 (Modifiers) 以及 NPC 間好感度/信任度網絡。
+
+### 6.1 職責與架構
+
+- **動態實體數據分離**：嚴格遵循 `AGENTS.md` 規範，作為從 JSON 模板實例化後的個體專屬 Runtime Instance。
+- **15 維度完全對齊**：數值欄位排序嚴格對齊 `npc_normalization.json`、`NPCDecision.cs` 及 `NPCDecisionService`。
+- **生理與心理代謝**：支援以 Tick 為單位的自動數值衰減與恢復（如飢餓消耗、睡眠體力恢復、飢餓引發健康下降、自癒機制等）。
+- **修飾器支援 (Modifiers)**：支援暫時性或持續性效果（如 `buff_coffee`、`sick` 等），每個 Tick 自動結算。
+- **關係網絡儲存**：記錄對其他 NPC 的好感度 (`friendships`) 與信任度 (`trust`)。
+
+### 6.2 15 維度神經特徵清單
+
+| 索引 | 欄位名稱        | 型別    | 數值範圍      | 說明                                             |
+| :--: | :-------------- | :------ | :------------ | :----------------------------------------------- |
+| `0`  | `hp`            | `float` | `0.0 ~ 100.0` | 生命值（歸零死亡，過半驟降昏迷）                 |
+| `1`  | `health`        | `float` | `0.0 ~ 100.0` | 健康度（低於一定值扣血，高於 70 配合飽食可自癒） |
+| `2`  | `stamina`       | `float` | `0.0 ~ 100.0` | 體力（做事情消耗，睡眠時快速回復）               |
+| `3`  | `hunger`        | `float` | `0.0 ~ 100.0` | 飽食度（每 Tick 固定消耗，過低觸發尋找食物）     |
+| `4`  | `social_desire` | `float` | `0.0 ~ 100.0` | 社交慾望（隨時間固定衰減）                       |
+| `5`  | `mood`          | `float` | `0.0 ~ 100.0` | 心情（生理不適時下降，正常時回穩）               |
+| `6`  | `job_id`        | `int`   | `1 ~ 9`       | 職業編號（礦工、農民、醫生等）                   |
+| `7`  | `money`         | `int`   | `0 ~ 9999`    | 持有金錢                                         |
+| `8`  | `wood`          | `int`   | `0 ~ 9999`    | 持有木頭                                         |
+| `9`  | `stone`         | `int`   | `0 ~ 9999`    | 持有石頭                                         |
+| `10` | `mineral`       | `int`   | `0 ~ 9999`    | 持有礦物                                         |
+| `11` | `crops`         | `int`   | `0 ~ 9999`    | 持有農作物                                       |
+| `12` | `fish`          | `int`   | `0 ~ 9999`    | 持有魚                                           |
+| `13` | `food`          | `int`   | `0 ~ 9999`    | 持有料理                                         |
+| `14` | `lunchbox`      | `int`   | `0 ~ 9999`    | 持有便當                                         |
+
+### 6.3 訊號 (Signals)
+
+| 訊號名稱               | 參數清單                                                                        | 觸發時機與用途                 |
+| :--------------------- | :------------------------------------------------------------------------------ | :----------------------------- |
+| `stats_changed`        | `npc_id: String`                                                                | 數值變動或每輪 Tick 更新後廣播 |
+| `hp_depleted`          | `npc_id: String`                                                                | 生命值降至 0 時觸發            |
+| `hunger_critical`      | `npc_id: String`                                                                | 飽食度低於 20 時警報觸發       |
+| `stamina_depleted`     | `npc_id: String`                                                                | 體力耗盡低於 10 時觸發         |
+| `item_acquired`        | `npc_id: String, item_type: String, amount: int`                                | 獲得物品時觸發                 |
+| `item_consumed`        | `npc_id: String, item_type: String, amount: int`                                | 消耗物品時觸發                 |
+| `relationship_changed` | `source_id: String, target_id: String, new_friendship: float, new_trust: float` | 與對象關係值變動時觸發         |
+
+### 6.4 公開方法 (Public Methods)
+
+#### `to_feature_vector() -> PackedFloat32Array`
+
+- **說明**：匯出長度為 15 的特徵向量，可直接傳入 `NPCDecisionService.forward()` 或 `evaluate_decision()`。
+
+#### `from_feature_vector(vec: PackedFloat32Array) -> void`
+
+- **說明**：從 15 維陣列中反向賦值至各屬性。
+
+#### `to_dict() -> Dictionary` / `from_dict(data: Dictionary) -> void`
+
+- **說明**：完整資料字典序列化與反序列化（包含基本身份、15 維度數據、好感度、信任度與詞條偏移量）。
+
+#### `tick_update(delta_ticks: int = 1, is_sleeping: bool = false, is_working: bool = false) -> void`
+
+- **說明**：依據推進的 Tick 數，計算飽食度下降、體力升降（睡眠回血、工作耗體）、健康度聯動與修飾器結算。
+
+#### `add_item(item_type: String, amount: int = 1) -> void` / `consume_item(item_type: String, amount: int = 1) -> bool`
+
+- **說明**：管理物品與金錢的增加與消耗。
+
+#### `eat_food(prefer_lunchbox: bool = true) -> bool`
+
+- **說明**：執行進食，扣減便當或料理，並回復飽食度、體力與心情。
+
+#### `get_friendship(target_id: String) -> float` / `get_trust(target_id: String) -> float`
+
+- **說明**：查詢對特定 NPC 的好感度或信任度（未設定時預設回傳 50.0）。
+
+#### `modify_relationship(target_id: String, delta_friendship: float, delta_trust: float) -> void`
+
+- **說明**：變動與特定 NPC 的好感度或信任度，並發射 `relationship_changed` 訊號。
+
+#### `add_modifier(mod: Dictionary) -> void` / `remove_modifier(mod_id: String) -> void`
+
+- **說明**：掛載或移除動態修飾器。
+
+---
+
+## 7. NPC 控制器：NPCController (`scripts/entities/npc_controller.gd`)
+
+繼承自 `CharacterBody2D` 的核心角色控制器，負責驅動 NPC 的有限狀態機 (FSM)、A\* 網格平滑尋路 (Tween)、四方向走動與定格動畫，並在遊戲 Tick 推進時代謝數值與執行 AI 決策。
+
+### 7.1 職責與狀態機 (FSM)
+
+```gdscript
+enum State {
+    IDLE,         # 待機 (鎖定在當前朝向的第 0 幀)
+    MOVING,       # 沿著 A* 網格路徑平滑移動中
+    INTERACTING,  # 社交交流或對話中 (開啟氣泡)
+    WORKING,      # 崗位執勤工作中 (農作、採礦、巡視等)
+    RESTING       # 在家睡覺或醫院治療中 (高速恢復體力)
+}
+```
+
+- **呼叫下層、訊號上層 (Call Down, Signal Up)**：內部透過發射 `state_changed`、`target_reached`、`action_started`、`action_completed` 與外部系統通信。
+- **Tween 平滑位移**：嚴禁在 `_process` 中手動更新座標，全面使用 `Tween.TRANS_LINEAR` 逐格平滑過渡。
+- **4 方向行走與定格**：移動時依方向向量自動切換 `walk_up/down/left/right`，到達目的地時調用 `pause()` 與 `frame = 0` 保持自然定格。
+
+### 7.2 匯出參數 (Exports)
+
+| 屬性名稱                  | 型別                   | 預設值 | 說明                                                  |
+| :------------------------ | :--------------------- | :----- | :---------------------------------------------------- |
+| `npc_data`                | `Resource` (`NPCData`) | `null` | 關聯的個體數值模型，若為空則在 `_ready` 時自動建立    |
+| `step_duration`           | `float`                | `0.22` | 每走 1 個地塊所花費之秒數                             |
+| `auto_ai_enabled`         | `bool`                 | `true` | 是否啟用 AI 自主決策迴圈                              |
+| `decision_interval_ticks` | `int`                  | `30`   | 當前無特定任務時，每隔多少 Ticks 主動觸發一次決策檢查 |
+
+### 7.3 訊號 (Signals)
+
+| 訊號名稱           | 參數清單                                                 | 觸發時機與用途             |
+| :----------------- | :------------------------------------------------------- | :------------------------- |
+| `state_changed`    | `old_state: State, new_state: State`                     | 狀態機狀態切換時發射       |
+| `target_reached`   | `destination_cell: Vector2i`                             | A\* 尋路抵達最終地塊時發射 |
+| `action_started`   | `action_type: int, action_name: String, target_poi: int` | 開始執行新行為時發射       |
+| `action_completed` | `action_type: int`                                       | 行為結束時發射             |
+
+### 7.4 公開方法 (Public Methods)
+
+#### `make_decision(current_tick: int) -> void`
+
+- **說明**：主動觸發 AI 決策，調用 `NPCDecisionService.evaluate_decision()` 並啟動相應行為（如尋路至目標 POI、原地吃便當、社交等）。
+
+#### `set_state(new_state: State) -> void`
+
+- **說明**：強制轉換狀態機狀態，自動處理動畫定格與信號發射。
+
+#### `move_along_grid(target_cell: Vector2i, on_complete: Callable = Callable()) -> void`
+
+- **說明**：向 `NavigationManager` 請求路徑，依序執行平滑 Tween 移動，並在抵達後執行 `on_complete` 回呼。
+
+#### `face_direction(direction_str: String) -> void`
+
+- **說明**：設定 NPC 朝向（`"up"`、`"down"`、`"left"`、`"right"`）並定格於第 0 幀。
+
+#### `face_toward(target_pos: Vector2) -> void`
+
+- **說明**：計算與目標世界座標的相對向量，自動轉向目標。
+
+#### `show_bubble(duration: float = 2.0) -> void` / `hide_bubble() -> void`
+
+- **說明**：控制頭頂對話氣泡顯示與計時隱藏。
+
+---
+
+## 8. NPC 生成工廠：NPCSpawner (`scripts/entities/npc_spawner.gd`)
+
+繼承自 `Node2D` 的資料驅動型生成工廠，負責解析 `data/poi_locations.json` 註冊全域 POI 座標、讀取 `data/npc_templates.json` 模板、動態實例化 NPC 實體、組裝 4 向 SpriteFrames 動畫貼圖並注入獨立的 `NPCData`。
+
+### 8.1 職責與架構
+
+- **資料驅動 (Data-Driven)**：完全與代碼分離，新增或調整 NPC 屬性、住宅、工作地點僅需編輯 JSON。
+- **動態換皮 (Dynamic Skinning)**：傳入 16x32 (4 欄 x 4 列) 的 Sprite Sheet 貼圖路徑，於記憶體中自動切分出 `walk_down`、`walk_left`、`walk_right`、`walk_up` 動畫幀，無需在編輯器中重複切圖。
+- **個體資料獨立注入**：為每一位生成的 NPC 實例化專屬的 `NPCData` 物件，確保生命、飽食度與物品庫存相互獨立。
+- **安全座標配置**：NPC 出生時自動定位至所屬自宅（`home_poi_id`）的網格座標中心。
+
+### 8.2 匯出參數 (Exports)
+
+| 屬性名稱              | 型別             | 預設值 | 說明                                                                   |
+| :-------------------- | :--------------- | :----- | :--------------------------------------------------------------------- |
+| `spawn_count`         | `int` (`1 ~ 20`) | `3`    | 遊戲啟動時生成之 NPC 數量（預設 3 隻供初步觀察，可調至 20 隻全鎮運轉） |
+| `auto_spawn_on_ready` | `bool`           | `true` | 是否在進入場景樹 `_ready` 時自動執行 POI 註冊與 NPC 批量生成           |
+
+### 8.3 公開與核心方法 (Public & Core Methods)
+
+#### `initialize_and_spawn() -> void`
+
+- **說明**：依序執行導航管理器自動探測/實例化 (`_ensure_navigation_manager`)、POI 註冊、模板載入與 NPC 批量生成。
+
+#### `_ensure_navigation_manager() -> void`
+
+- **說明**：自動檢測全域與場景樹中的 `NavigationManager`。若當前場景尚未掛載，將動態實例化並加載至場景樹中，自動關聯地圖地面層與障礙層完成 A\* 網格初始化，並登錄至 `Global` 服務定位器。
+
+#### `load_and_register_pois(path: String = POIS_PATH) -> bool`
+
+- **說明**：讀取 POI 座標配置 JSON 檔，將所有設施與住宅網格座標登記至 `Global.register_poi()`。
+
+#### `load_templates(path: String = TEMPLATES_PATH) -> bool`
+
+- **說明**：讀取 NPC 模板 JSON 檔並解析為字典陣列。
+
+#### `spawn_all() -> Array[CharacterBody2D]`
+
+- **說明**：依據 `spawn_count` 數量批量生成 NPC 實體並加入場景。
+
+#### `spawn_npc(template: Dictionary) -> CharacterBody2D`
+
+- **說明**：根據單一 NPC 字典模板建立實體、換皮、配置初始屬性並放置於地圖上。
+
+#### `create_sprite_frames_from_texture(texture: Texture2D) -> SpriteFrames` (Static)
+
+- **說明**：將 4x4 16x32 人物貼圖切分為上下左右 4 向歩行動畫之通用靜態工具函式。
