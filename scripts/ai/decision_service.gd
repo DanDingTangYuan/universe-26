@@ -281,13 +281,15 @@ func evaluate_decision(
 	# 規則 3：上班時間檢查
 	var work_check: Dictionary = _check_job_work_time(current_tick, job_id, stats)
 	if work_check.get("is_working", false):
+		var act_id: int = int(work_check.get("action", 7))
+		var job_name: String = String(work_check.get("job_name", "工作"))
 		return {
-			"best_action": work_check.get("action", 0),
-			"best_action_name": ACTION_NAMES[work_check.get("action", 0)],
+			"best_action": act_id,
+			"best_action_name": "執勤工作 (%s)" % job_name,
 			"target_location": work_check.get("poi", 0),
 			"scores": PackedFloat32Array(),
 			"is_rule_override": true,
-			"override_reason": "工作時間，前往執勤崗位"
+			"override_reason": "工作時間，前往 %s 崗位執勤" % job_name
 		}
 
 	# 規則 4：無排程干預時，由神經網路 (AI) 自由決策
@@ -403,14 +405,14 @@ func _check_job_work_time(tick: int, job_id: int, stats: PackedFloat32Array) -> 
 		var shifts: Array = job_info["shifts"]
 		for shift in shifts:
 			if tick >= shift["start"] and tick < shift["end"]:
-				return {"is_working": true, "poi": poi, "action": 0}
+				return {"is_working": true, "poi": poi, "action": 7, "job_name": job_info.get("name", "工作")}
 		return {"is_working": false}
 
 	# 單班制
 	var start_t: int = job_info.get("work_start", -1)
 	var end_t: int = job_info.get("work_end", -1)
 	if start_t >= 0 and end_t >= 0 and tick >= start_t and tick < end_t:
-		var act: int = 7 if job_id == 7 else 0 # 農夫巡田水或工作
-		return {"is_working": true, "poi": poi, "action": act}
+		var act: int = 7 if job_id == 7 else (8 if job_id == 8 else (1 if job_id == 2 else 7))
+		return {"is_working": true, "poi": poi, "action": act, "job_name": job_info.get("name", "工作")}
 
 	return {"is_working": false}

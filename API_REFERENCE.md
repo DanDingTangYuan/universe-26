@@ -105,6 +105,8 @@ enum LocationType {
 | `poi_registered`       | `poi_id: int, cell_pos: Vector2i`                           | 新增地圖設施座標時觸發                                 |
 | `npc_action_started`   | `npc_id: String, action: ActionType, target_cell: Vector2i` | NPC 開始執行某行動時廣播 (供 UI 或監控)                |
 | `npc_action_completed` | `npc_id: String, action: ActionType`                        | NPC 完成行動時廣播                                     |
+| `npc_selected`         | `npc: Node2D`                                               | 玩家點選/選中某 NPC 時廣播 (供觀測 HUD 綁定)           |
+| `npc_deselected`       | (無)                                                        | 取消選中 NPC 時廣播                                    |
 
 ---
 
@@ -186,6 +188,18 @@ enum LocationType {
 #### `has_npc(npc_id: String) -> bool`
 
 - **說明**：確認特定 ID 的 NPC 是否已在場上存在。
+
+#### `select_npc(npc: Node2D) -> void`
+
+- **說明**：選中特定 NPC 實體，發射 `npc_selected(npc)` 全域訊號供觀測 HUD 進行追蹤顯示。
+
+#### `deselect_npc() -> void`
+
+- **說明**：取消當前選中的 NPC，發射 `npc_deselected()` 全域訊號關閉觀測視窗。
+
+#### `get_selected_npc() -> Node2D`
+
+- **說明**：取得目前被選中的 NPC 實體節點；若無選中或節點失效則回傳 `null`。
 
 ---
 
@@ -571,8 +585,17 @@ enum State {
 | `target_reached`   | `destination_cell: Vector2i`                             | A\* 尋路抵達最終地塊時發射 |
 | `action_started`   | `action_type: int, action_name: String, target_poi: int` | 開始執行新行為時發射       |
 | `action_completed` | `action_type: int`                                       | 行為結束時發射             |
+| `clicked`          | (無)                                                     | 玩家點擊此 NPC 時發射      |
 
-### 7.4 公開方法 (Public Methods)
+### 7.4 公開方法與屬性 (Public Methods & Properties)
+
+#### `last_decision: Dictionary`
+
+- **說明**：快取該 NPC 最近一次 AI 大腦決策結果（包含 `best_action`, `best_action_name`, `target_location`, `scores`, `is_rule_override`, `override_reason`），供觀測面板讀取。
+
+#### `get_state_name() -> String`
+
+- **說明**：取得當前狀態機狀態之中文描述（如 `"待機"`、`"移動中"`、`"工作中"` 等）。
 
 #### `make_decision(current_tick: int) -> void`
 
@@ -647,3 +670,32 @@ enum State {
 #### `create_sprite_frames_from_texture(texture: Texture2D) -> SpriteFrames` (Static)
 
 - **說明**：將 4x4 16x32 人物貼圖切分為上下左右 4 向歩行動畫之通用靜態工具函式。
+
+---
+
+## 9. 即時觀測視窗：NPCInspector (`scripts/ui/npc_inspector.gd`)
+
+繼承自 `CanvasLayer`（繪製層級 `layer = 12`）的即時資訊懸浮卡片，當玩家點擊地圖上的任一 NPC 時自動彈出並動態跟隨其畫面像素位置，提供模型推論結果與生理狀態的可視化監控。
+
+### 9.1 核心特性
+
+- **角色側邊平滑跟隨 (Side-by-Side Tracking)**：透過 `get_global_transform_with_canvas().origin` 將 NPC 世界座標轉換為螢幕像素座標，預設浮動於角色「右側」（若靠右邊緣則自動翻轉至「左側」），完全不遮擋角色本體與行走動畫，可同時清楚觀看角色肢體演出與 HUD 數據。
+- **橫向精巧雙欄版面 (Compact Two-Column)**：尺寸控制在 380x210 像素，左欄顯示 AI 大腦決策（目標 POI、規則覆蓋或神經推論、前 2 高評分條），右欄顯示 15 維度生理進度條與背包庫存，拒絕冗長垂直拉伸。
+- **純代碼生成 (Pure Code Driven)**：UI 節點均以純 GDScript 動態構建，完全不需要建立或維護 `.tscn` 場景。
+- **即時數據動態展示**：
+  - **身份與狀態**：NPC 姓名、職業、FSM 狀態機標籤（彩色高亮）、地圖座標與所屬網格 Cell。
+  - **AI 大腦與決策**：當前行為與目標 POI、推論引擎（C# ONNX Runtime 或 GDScript MLP）、決策機制（規則覆蓋原因或神經自主決策）、神經輸出評分 Top 3（數值與微型進度條）。
+  - **15 維度生理狀態**：生命、健康、體力、飽食度、社交慾望、心情（雙欄即時彩色進度條）。
+  - **經濟與庫存**：金錢餘額、攜帶物品（木/石/礦/作物/魚/料理/便當）。
+- **鏡頭聚焦連動**：提供「鏡頭鎖定/平移」按鈕，點擊後自動平滑平移至選中的 NPC。
+- **操作防呆**：支援點擊其他 NPC 無縫切換、點擊右上角 `[✕]` 或按鍵盤 `ESC` 鍵立即關閉。
+
+### 9.2 公開方法 (Public Methods)
+
+#### `inspect_npc(npc: Node2D) -> void`
+
+- **說明**：選中並開始檢視指定 NPC 實體，開啟懸浮面板並動態更新資訊。
+
+#### `close() -> void`
+
+- **說明**：關閉觀測視窗並取消全域選中狀態。

@@ -42,6 +42,9 @@ signal action_started(action_type: int, action_name: String, target_poi: int)
 ## 完成特定行為時發射
 signal action_completed(action_type: int)
 
+## 當玩家點擊此 NPC 時發射
+signal clicked()
+
 # ------------------------------------------------------------------------------
 # 3. 節點與匯出屬性 (Exports & Node References)
 # ------------------------------------------------------------------------------
@@ -69,6 +72,9 @@ signal action_completed(action_type: int)
 var current_state: State = State.IDLE
 var current_action_id: int = -1
 var facing_direction: String = "down"
+
+## 最近一次 AI 決策結果字典 (包含 best_action, target_location, scores, is_rule_override, override_reason)
+var last_decision: Dictionary = {}
 
 var _current_path: Array[Vector2i] = []
 var _move_tween: Tween = null
@@ -102,6 +108,9 @@ func _ready() -> void:
 	# 4. 初次定位
 	call_deferred("_initialize_position")
 
+	# 5. 啟用點選感應
+	_setup_click_detection()
+
 
 func _exit_tree() -> void:
 	# 卸載時從全域註銷
@@ -113,9 +122,14 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
-	# 處理工作或休息時的計時邏輯 (若需要固定時長行為)
+	# 處理工作或休息時的計時邏輯 (隨全域時間流速倍率縮放)
+	var g: Node = _get_global()
+	var cur_scale: float = g.time_scale if (g and not g.is_time_paused) else 1.0
+	if g and g.is_time_paused:
+		cur_scale = 0.0
+
 	if _action_timer > 0.0:
-		_action_timer -= delta
+		_action_timer -= delta * cur_scale
 		if _action_timer <= 0.0:
 			_on_action_timer_finished()
 
@@ -164,6 +178,8 @@ func make_decision(current_tick: int) -> void:
 		npc_data.personality_offset
 	)
 
+	last_decision = decision
+
 	var action_id: int = int(decision.get("best_action", 0))
 	var action_name: String = String(decision.get("best_action_name", "閒逛"))
 	var target_poi: int = int(decision.get("target_location", 0))
@@ -179,6 +195,11 @@ func make_decision(current_tick: int) -> void:
 ## 執行特定決策行為
 func _execute_action(action_id: int, target_poi: int) -> void:
 	_is_executing_action = true
+
+	# 檢查是否為工作排程 (目標地點為工作 POI 12~19，且為工作行為或排程覆蓋)
+	if target_poi in [12, 13, 14, 15, 16, 17, 18, 19] and (action_id in [1, 7, 8] or last_decision.get("is_rule_override", false)):
+		_execute_work(npc_data.job_id if npc_data else 1, target_poi)
+		return
 
 	match action_id:
 		0: # 閒逛
@@ -221,6 +242,35 @@ func _execute_action(action_id: int, target_poi: int) -> void:
 		_:
 			_is_executing_action = false
 			set_state(State.IDLE)
+
+
+## 崗位執勤工作行為
+func _execute_work(job_id: int, poi: int) -> void:
+	_move_to_poi_and_act(poi, State.WORKING, 8.0, func():
+		# 抵達崗位，彈出工作氣泡並產生物資與代謝
+		show_bubble(2.5)
+		if npc_data:
+			match job_id:
+				1: # 礦工 -> 產出礦石與石頭
+					npc_data.add_item("mineral", 1)
+					npc_data.add_item("stone", 1)
+				2: # 圖書館員 -> 整理書籍，獲取工資
+					npc_data.add_item("money", 2)
+				3: # 漁夫 -> 產出鮮魚
+					npc_data.add_item("fish", 1)
+				4: # 餐廳員工 -> 產出料理與便當
+					npc_data.add_item("lunchbox", 1)
+					npc_data.add_item("food", 1)
+					npc_data.add_item("money", 3)
+				5: # 醫護人員 -> 醫院工作
+					npc_data.add_item("money", 5)
+				6: # 伐木工 -> 產出木材
+					npc_data.add_item("wood", 1)
+				7: # 農民 -> 產出農作物
+					npc_data.add_item("crops", 1)
+				8: # 商店店長 -> 販售營業
+					npc_data.add_item("money", 4)
+	)
 
 
 ## 原地進食
@@ -422,13 +472,17 @@ func _step_move(step_index: int, on_complete: Callable) -> void:
 		if animated_sprite:
 			animated_sprite.play("walk_" + facing_direction)
 
-	# 平滑位移
+	# 平滑位移 (移動速度隨全域時間流速倍率縮放，確保與遊戲內時鐘步調一致)
 	if _move_tween and _move_tween.is_valid():
 		_move_tween.kill()
 
+	var g: Node = _get_global()
+	var cur_scale: float = g.time_scale if (g and not g.is_time_paused) else 1.0
+	var actual_duration: float = step_duration / maxf(0.1, cur_scale)
+
 	_move_tween = create_tween()
 	_move_tween.set_trans(Tween.TRANS_LINEAR)
-	_move_tween.tween_property(self, "global_position", next_pos, step_duration)
+	_move_tween.tween_property(self, "global_position", next_pos, actual_duration)
 	_move_tween.tween_callback(func():
 		_step_move(step_index + 1, on_complete)
 	)
@@ -493,3 +547,44 @@ func _vector_to_direction(dir: Vector2) -> String:
 		return "right" if dir.x > 0 else "left"
 	else:
 		return "down" if dir.y > 0 else "up"
+
+## 取得當前狀態名稱 (中文)
+func get_state_name() -> String:
+	match current_state:
+		State.IDLE: return "待機"
+		State.MOVING: return "移動中"
+		State.INTERACTING: return "社交中"
+		State.WORKING: return "工作中"
+		State.RESTING: return "休息中"
+	return "未知"
+
+## 初始化滑鼠點擊感應區域 (動態加入 Area2D，無需編輯 .tscn)
+func _setup_click_detection() -> void:
+	input_pickable = true
+	var click_area: Area2D = Area2D.new()
+	click_area.name = "ClickArea"
+	var col_shape: CollisionShape2D = CollisionShape2D.new()
+	var rect: RectangleShape2D = RectangleShape2D.new()
+	rect.size = Vector2(24, 36)
+	col_shape.shape = rect
+	col_shape.position = Vector2(0, -8)
+	click_area.add_child(col_shape)
+	click_area.input_pickable = true
+	click_area.input_event.connect(_on_click_area_input_event)
+	click_area.mouse_entered.connect(func(): Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND))
+	click_area.mouse_exited.connect(func(): Input.set_default_cursor_shape(Input.CURSOR_ARROW))
+	add_child(click_area)
+
+func _on_click_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_on_npc_clicked()
+
+func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_on_npc_clicked()
+
+func _on_npc_clicked() -> void:
+	var g: Node = _get_global()
+	if g and g.has_method("select_npc"):
+		g.select_npc(self)
+	clicked.emit()

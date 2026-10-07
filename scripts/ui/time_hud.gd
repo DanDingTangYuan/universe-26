@@ -57,6 +57,24 @@ func _connect_global_signals() -> void:
 		if global_node.has_signal("on_midnight_reached"):
 			global_node.on_midnight_reached.connect(_on_midnight_reached)
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_SPACE:
+				_on_pause_button_pressed()
+			KEY_1:
+				_set_speed(1.0)
+			KEY_2:
+				_set_speed(2.0)
+			KEY_3:
+				_set_speed(4.0)
+			KEY_4:
+				_set_speed(8.0)
+			KEY_5:
+				_set_speed(16.0)
+			KEY_6:
+				_set_speed(60.0)
+
 func _connect_ui_buttons() -> void:
 	if pause_btn:
 		pause_btn.pressed.connect(_on_pause_button_pressed)
@@ -65,7 +83,20 @@ func _connect_ui_buttons() -> void:
 	if speed_2x_btn:
 		speed_2x_btn.pressed.connect(func(): _set_speed(2.0))
 	if speed_4x_btn:
-		speed_4x_btn.pressed.connect(func(): _set_speed(4.0))
+		speed_4x_btn.pressed.connect(func():
+			var g = get_node_or_null("/root/Global")
+			if g:
+				if is_equal_approx(g.time_scale, 4.0):
+					_set_speed(8.0)
+				elif is_equal_approx(g.time_scale, 8.0):
+					_set_speed(16.0)
+				elif is_equal_approx(g.time_scale, 16.0):
+					_set_speed(32.0)
+				elif is_equal_approx(g.time_scale, 32.0):
+					_set_speed(60.0)
+				else:
+					_set_speed(4.0)
+		)
 	if ff_hour_btn:
 		ff_hour_btn.pressed.connect(_on_ff_hour_pressed)
 	if ff_midnight_btn:
@@ -142,7 +173,12 @@ func _update_speed_buttons() -> void:
 	if speed_2x_btn:
 		speed_2x_btn.modulate = Color(1.3, 1.3, 0.7) if is_equal_approx(current_scale, 2.0) else Color.WHITE
 	if speed_4x_btn:
-		speed_4x_btn.modulate = Color(1.3, 1.3, 0.7) if is_equal_approx(current_scale, 4.0) else Color.WHITE
+		var is_fast: bool = current_scale >= 4.0
+		speed_4x_btn.modulate = Color(1.3, 1.3, 0.7) if is_fast else Color.WHITE
+		if current_scale > 4.0:
+			speed_4x_btn.text = "%dx" % int(current_scale)
+		else:
+			speed_4x_btn.text = "4x"
 
 ## 公開方法：更新 NPC 當前狀態字串
 func set_npc_status(status_text: String) -> void:

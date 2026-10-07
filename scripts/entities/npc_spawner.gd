@@ -7,6 +7,7 @@ class_name NPCSpawner
 extends Node2D
 
 const NavigationManagerClass = preload("res://scripts/core/navigation_manager.gd")
+const NPCInspectorClass = preload("res://scripts/ui/npc_inspector.gd")
 const NPCScene = preload("res://scene/NPCs/npc_1.tscn")
 const NPCControllerClass = preload("res://scripts/entities/npc_controller.gd")
 const NPCDataClass = preload("res://scripts/entities/npc_data.gd")
@@ -47,9 +48,31 @@ func _ready() -> void:
 ## 初始化導航、POI 並依據設定生成指定數量之 NPC
 func initialize_and_spawn() -> void:
 	_ensure_navigation_manager()
+	_ensure_npc_inspector()
 	load_and_register_pois()
 	load_templates()
 	spawn_all()
+
+## 確保場景中擁有 NPCInspector 觀測視窗
+func _ensure_npc_inspector() -> void:
+	var existing_inspector = null
+	if get_parent() != null:
+		existing_inspector = get_parent().find_child("NPCInspector", true, false)
+	if existing_inspector == null:
+		var st: SceneTree = Engine.get_main_loop() as SceneTree
+		if st and st.current_scene:
+			existing_inspector = st.current_scene.find_child("NPCInspector", true, false)
+
+	if existing_inspector != null:
+		return
+
+	var inspector = NPCInspectorClass.new()
+	inspector.name = "NPCInspector"
+	if get_parent() != null:
+		get_parent().add_child(inspector)
+	else:
+		add_child(inspector)
+	print("[NPCSpawner] 自動實例化並加載 NPCInspector 即時觀測視窗。")
 
 ## 確保導航管理器就緒且已註冊至 Global
 func _ensure_navigation_manager() -> void:

@@ -94,6 +94,12 @@ signal npc_action_started(npc_id: String, action: ActionType, target_cell: Vecto
 ## NPC 完成行為時發射
 signal npc_action_completed(npc_id: String, action: ActionType)
 
+## NPC 被玩家點選/選中時發射
+signal npc_selected(npc: Node2D)
+
+## 取消選中 NPC 時發射
+signal npc_deselected()
+
 # ------------------------------------------------------------------------------
 # 3. 匯出與內部變數 (Properties)
 # ------------------------------------------------------------------------------
@@ -266,6 +272,28 @@ func get_all_npcs() -> Array[Node2D]:
 ## 檢查特定 NPC 是否存在
 func has_npc(npc_id: String) -> bool:
 	return _registered_npcs.has(npc_id) and is_instance_valid(_registered_npcs[npc_id])
+
+## 選中特定 NPC
+func select_npc(npc: Node2D) -> void:
+	if _selected_npc == npc:
+		return
+	_selected_npc = npc
+	npc_selected.emit(npc)
+
+## 取消選中當前 NPC
+func deselect_npc() -> void:
+	if _selected_npc != null:
+		_selected_npc = null
+		npc_deselected.emit()
+
+## 取得目前選中的 NPC
+func get_selected_npc() -> Node2D:
+	if _selected_npc != null and is_instance_valid(_selected_npc):
+		return _selected_npc
+	_selected_npc = null
+	return null
+
+var _selected_npc: Node2D = null
 
 # ------------------------------------------------------------------------------
 # 8. POI / 設施註冊中心 (Point of Interest Registry)
