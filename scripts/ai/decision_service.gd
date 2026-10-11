@@ -416,3 +416,72 @@ func _check_job_work_time(tick: int, job_id: int, stats: PackedFloat32Array) -> 
 		return {"is_working": true, "poi": poi, "action": act, "job_name": job_info.get("name", "工作")}
 
 	return {"is_working": false}
+
+# ------------------------------------------------------------------------------
+# 9. 社交互動決策服務 (Social Decision Evaluation)
+# ------------------------------------------------------------------------------
+
+const SOCIAL_ACTION_NAMES: Array[String] = [
+	"無",
+	"普通聊天",
+	"討論主題",
+	"詢問問題",
+	"共同活動",
+	"捉弄",
+	"欺騙",
+	"訊息傳播"
+]
+
+## 檢查社交 ONNX 推論引擎是否成功就緒
+func is_social_engine_available() -> bool:
+	return _use_csharp_onnx and _csharp_bridge != null and bool(_csharp_bridge.get("IsSocialInitialized"))
+
+## 評估單一對象的社交互動意願 (0.0 ~ 1.0)
+func evaluate_social(
+	time: float,
+	social_desire: float,
+	mood: float,
+	favorability: float,
+	distance: float,
+	days_since_interaction: float,
+	history_score: float = 0.5
+) -> float:
+	if is_social_engine_available():
+		return float(_csharp_bridge.EvaluateSocial(
+			time, social_desire, mood, favorability, distance, days_since_interaction, history_score
+		))
+	return 0.0
+
+## 批次評估多位候選 NPC 並透過加權輪盤選出最佳互動目標
+## candidates 陣列中每個字典包含: { "id": int, "distance": float, "favorability": float, "days_since_interaction": float, "history_score": float }
+func evaluate_social_candidates(
+	time: float,
+	social_desire: float,
+	mood: float,
+	candidates: Array
+) -> Dictionary:
+	if is_social_engine_available():
+		return _csharp_bridge.EvaluateSocialCandidates(time, social_desire, mood, candidates)
+	return {
+		"target_id": -1,
+		"highest_target_id": -1,
+		"score": 0.0,
+		"candidate_scores": {}
+	}
+
+## 決定具體社交行為代碼 (1~7)
+## 1=普通聊天, 2=討論主題, 3=詢問問題, 4=共同活動, 5=捉弄, 6=欺騙, 7=訊息傳播
+func decide_social_action(target_id: int, has_spread_message: bool = false) -> int:
+	if is_social_engine_available() and _csharp_bridge.has_method("DecideSocialAction"):
+		return int(_csharp_bridge.DecideSocialAction(target_id, has_spread_message))
+	if target_id <= 0:
+		return 0
+	if has_spread_message:
+		return 7
+	return randi_range(1, 6)
+
+## 取得社交行為中文名稱
+func get_social_action_name(action_id: int) -> String:
+	if action_id >= 0 and action_id < SOCIAL_ACTION_NAMES.size():
+		return SOCIAL_ACTION_NAMES[action_id]
+	return "未知"

@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://poi_editor_tool_scene"]
+
+[ext_resource type="PackedScene" uid="uid://66fvualfrb68" path="res://scene/map.tscn" id="1_map"]
+[ext_resource type="Script" path="res://tools/poi_editor/poi_editor.gd" id="2_script"]
+
+[node name="POIEditor" type="Node2D"]
+script = ExtResource("2_script")
+
+[node name="Map" parent="." instance=ExtResource("1_map")]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(640, 480)
+zoom = Vector2(1.5, 1.5)
+

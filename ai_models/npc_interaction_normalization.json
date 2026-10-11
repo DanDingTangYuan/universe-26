@@ -1,0 +1,39 @@
+{
+    "type": "StandardScaler",
+    "input_columns": [
+        "Time",
+        "SocialDesire",
+        "Mood",
+        "Favorability",
+        "Distance",
+        "DaysSinceInteraction",
+        "HistoryScore"
+    ],
+    "preprocessing": {
+        "Time": "x",
+        "SocialDesire": "1 - x / 100",
+        "Mood": "x / 100",
+        "Favorability": "x / 100",
+        "Distance": "1 - x / 32",
+        "DaysSinceInteraction": "x / 10",
+        "HistoryScore": "x"
+    },
+    "mean": [
+        901.9089965820312,
+        0.4993993639945984,
+        0.4980829656124115,
+        0.5009478330612183,
+        0.5009072422981262,
+        0.5000193119049072,
+        0.500991702079773
+    ],
+    "std": [
+        312.1993103027344,
+        0.29172754287719727,
+        0.2911248803138733,
+        0.2914070188999176,
+        0.2885502576828003,
+        0.31628531217575073,
+        0.27675527334213257
+    ]
+}

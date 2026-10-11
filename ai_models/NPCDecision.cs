@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 using System.Collections.Generic;
@@ -213,6 +213,48 @@ public class NPCDecision : IDisposable
             return "無";
         }
         return ActionNames[index];
+    }
+
+    /// <summary>
+    /// 依據行為分數與可選權重進行加權輪盤機率抽樣 (Roulette Wheel Selection)
+    /// </summary>
+    public int SampleAction(float[] scores, float[]? offsets = null)
+    {
+        if (scores == null || scores.Length == 0)
+        {
+            return -1;
+        }
+
+        int count = scores.Length;
+        double[] weightedScores = new double[count];
+        double totalScore = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            double weight = (offsets != null && i < offsets.Length) ? offsets[i] : 1.0;
+            if (weight < 0) weight = 0;
+            double s = Math.Max(0f, scores[i]) * weight;
+            weightedScores[i] = s;
+            totalScore += s;
+        }
+
+        if (totalScore <= 0)
+        {
+            return GetBestAction(scores);
+        }
+
+        double randomValue = Random.Shared.NextDouble() * totalScore;
+        double cumulative = 0;
+        for (int i = 0; i < count; i++)
+        {
+            cumulative += weightedScores[i];
+            if (randomValue < cumulative)
+            {
+                return i;
+            }
+        }
+
+        return count - 1;
     }
 
     //回傳行動的目的地(待修改)

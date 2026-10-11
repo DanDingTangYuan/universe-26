@@ -385,8 +385,11 @@ enum LocationType {
 ### 5.1 職責與特性
 
 - **雙引擎無縫切換 (C# ONNX Runtime / GDScript Fallback)**：
-  - **C# ONNX 引擎**（`ai_models/NPCDecisionBridge.cs`）：在 Godot Mono (.NET) 環境下，透過 `Microsoft.ML.OnnxRuntime` 直接讀取原生的 `res://ai_models/npc_decision_mlp.onnx` 二進位神經網路模型與 `npc_normalization.json`，進行硬體加速的高精度模型推論。
+  - **C# ONNX 引擎**（`ai_models/NPCDecisionBridge.cs`）：在 Godot Mono (.NET) 環境下，透過 `Microsoft.ML.OnnxRuntime` 直接讀取原生的 `res://ai_models/npc_decision_mlp.onnx`（一般決策模型）與 `res://ai_models/npc_interaction_mlp.onnx`（社交互動模型），進行硬體加速的高精度模型推論。
   - **GDScript 引擎**（`scripts/ai/decision_service.gd`）：在 Godot Standard（非 Mono）環境下，自動無縫降級使用原生 GDScript 矩陣運算，讀取 `res://ai_models/npc_weights.json`。
+- **雙階段決策管線 (Two-Stage Pipeline)**：
+  - **日常行為決策**：15 維特徵輸入，輸出 9 大日常行為機率，並可透過加權輪盤抽樣（Roulette Wheel Selection）提高行為豐富度。
+  - **社交互動決策**：當行為選定為「社交」時，以 7 維特徵（時間、社交慾望、心情、好感度、距離、上次互動天數、歷史評分）評估半徑 32 格內之候選者，加權抽選互動對象並決定 7 種社交行為。
 - **神經符號雙重決策 (Hybrid)**：
   - **規則層 (Rule-based)**：優先判斷關鍵作息（23:00 宵禁強行返家、12:00 午餐時間找食物或原地吃便當、上班時段依體力/健康判定出勤）。
   - **神經層 (Neural Model)**：無規則干預時，透過神經網路依據 15 維度生理狀態與個性詞條偏移量輸出 9 種行為分數（0.0 ~ 1.0）。
@@ -461,6 +464,36 @@ enum LocationType {
 #### `is_available_for_social(current_action: int, is_at_home: bool = false) -> bool`
 
 - **說明**：判斷該 NPC 當前是否處於可進行社交互動的狀態（若正在工作、就醫、閱讀、在家休息則回傳 `false`）。
+
+#### `is_social_engine_available() -> bool`
+
+- **說明**：查詢原生 C# ONNX 社交決策模型推論引擎是否已成功加載並就緒。
+
+#### `evaluate_social(time: float, social_desire: float, mood: float, favorability: float, distance: float, days_since_interaction: float, history_score: float = 0.5) -> float`
+
+- **說明**：透過 7 維社交特徵評估針對特定目標 NPC 的互動意願分數（0.0 ~ 1.0）。
+
+#### `evaluate_social_candidates(time: float, social_desire: float, mood: float, candidates: Array) -> Dictionary`
+
+- **說明**：批次評估半徑 32 格內的候選 NPC 陣列，並透過加權輪盤機率選出互動目標。
+- **輸入 `candidates` 格式**：`Array[Dictionary]`，每個字典格式為 `{ "id": int, "distance": float, "favorability": float, "days_since_interaction": float, "history_score": float }`。
+- **回傳字典格式**：
+  ```gdscript
+  {
+      "target_id": int,             # 加權輪盤選中之目標 ID (-1 表示無適合目標)
+      "highest_target_id": int,     # 分數最高之目標 ID
+      "score": float,               # 選中目標之意願評分 (0.0 ~ 1.0)
+      "candidate_scores": Dictionary# 各候選者分數字典 { npc_id: score }
+  }
+  ```
+
+#### `decide_social_action(target_id: int, has_spread_message: bool = false) -> int`
+
+- **說明**：決定具體社交行為代碼（1=普通聊天, 2=討論主題, 3=詢問問題, 4=共同活動, 5=捉弄, 6=欺騙, 7=訊息傳播）。若 `has_spread_message` 為真則固定為 7。
+
+#### `get_social_action_name(action_id: int) -> String`
+
+- **說明**：取得社交行為代碼對應的中文名稱。
 
 ---
 
