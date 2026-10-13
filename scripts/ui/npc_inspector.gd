@@ -43,6 +43,15 @@ var _mood_bar: ProgressBar = null
 var _money_label: Label = null
 var _inventory_label: Label = null
 
+# 社交大腦與靈魂記憶 UI 元件 (Tab 2)
+var _social_engine_label: Label = null
+var _social_target_label: Label = null
+var _social_act_label: Label = null
+var _social_time_label: Label = null
+var _ltm_label: Label = null
+var _mtm_label: Label = null
+var _stm_vbox: VBoxContainer = null
+
 var _focus_btn: Button = null
 var _close_btn: Button = null
 
@@ -85,7 +94,7 @@ func _build_ui() -> void:
 	# 主面板容器 (橫向精巧尺寸: 380 x 210)
 	_panel = PanelContainer.new()
 	_panel.name = "InspectorCard"
-	_panel.custom_minimum_size = Vector2(380, 210)
+	_panel.custom_minimum_size = Vector2(410, 250)
 
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.06, 0.08, 0.12, 0.94) # 深邃黑藍半透明
@@ -139,20 +148,29 @@ func _build_ui() -> void:
 
 	root_vbox.add_child(HSeparator.new())
 
-	# --- 核心雙欄佈局 (Columns: 左大腦 / 右生理與庫存) ---
-	var columns_hbox: HBoxContainer = HBoxContainer.new()
-	columns_hbox.set("theme_override_constants/separation", 10)
-	columns_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root_vbox.add_child(columns_hbox)
+	# --- 雙分頁容器 (TabContainer: 生理決策 / 社交記憶) ---
+	var tab_container: TabContainer = TabContainer.new()
+	tab_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tab_container.add_theme_font_size_override("font_size", 10)
+	root_vbox.add_child(tab_container)
+
+	# ==============================
+	# 分頁一：📊 生理與日常決策
+	# ==============================
+	var page_vitals: HBoxContainer = HBoxContainer.new()
+	page_vitals.name = "📊 生理與決策"
+	page_vitals.set("theme_override_constants/separation", 10)
+	page_vitals.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tab_container.add_child(page_vitals)
 
 	# ===== 左欄：AI 大腦與決策狀況 =====
 	var left_vbox: VBoxContainer = VBoxContainer.new()
 	left_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_vbox.set("theme_override_constants/separation", 3)
-	columns_hbox.add_child(left_vbox)
+	page_vitals.add_child(left_vbox)
 
 	var brain_title: Label = Label.new()
-	brain_title.text = "🧠 AI 大腦與決策"
+	brain_title.text = "🧠 AI 大腦日常決策"
 	brain_title.add_theme_font_size_override("font_size", 11)
 	brain_title.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
 	left_vbox.add_child(brain_title)
@@ -187,13 +205,13 @@ func _build_ui() -> void:
 	left_vbox.add_child(_score_box)
 
 	# 垂直分隔線
-	columns_hbox.add_child(VSeparator.new())
+	page_vitals.add_child(VSeparator.new())
 
 	# ===== 右欄：生理狀態與經濟庫存 =====
 	var right_vbox: VBoxContainer = VBoxContainer.new()
 	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_vbox.set("theme_override_constants/separation", 3)
-	columns_hbox.add_child(right_vbox)
+	page_vitals.add_child(right_vbox)
 
 	var vitals_title: Label = Label.new()
 	vitals_title.text = "❤️ 生理與經濟"
@@ -226,6 +244,90 @@ func _build_ui() -> void:
 	_inventory_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	_inventory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right_vbox.add_child(_inventory_label)
+
+	# ==============================
+	# 分頁二：🧠 社交與靈魂記憶 (模型實證)
+	# ==============================
+	var page_social: HBoxContainer = HBoxContainer.new()
+	page_social.name = "🧠 社交與記憶"
+	page_social.set("theme_override_constants/separation", 10)
+	page_social.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tab_container.add_child(page_social)
+
+	# ===== 社交欄 (左) =====
+	var soc_left: VBoxContainer = VBoxContainer.new()
+	soc_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	soc_left.set("theme_override_constants/separation", 3)
+	page_social.add_child(soc_left)
+
+	var soc_title: Label = Label.new()
+	soc_title.text = "🤝 社交 ONNX 大腦"
+	soc_title.add_theme_font_size_override("font_size", 11)
+	soc_title.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
+	soc_left.add_child(soc_title)
+
+	_social_engine_label = Label.new()
+	_social_engine_label.text = "引擎: 🚀 C# ONNX (7維推論)"
+	_social_engine_label.add_theme_font_size_override("font_size", 10)
+	_social_engine_label.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+	soc_left.add_child(_social_engine_label)
+
+	_social_target_label = Label.new()
+	_social_target_label.text = "對象: 尚無近期互動"
+	_social_target_label.add_theme_font_size_override("font_size", 10)
+	_social_target_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25))
+	soc_left.add_child(_social_target_label)
+
+	_social_act_label = Label.new()
+	_social_act_label.text = "行為: 普通聊天 (加權輪盤)"
+	_social_act_label.add_theme_font_size_override("font_size", 10)
+	_social_act_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
+	soc_left.add_child(_social_act_label)
+
+	_social_time_label = Label.new()
+	_social_time_label.text = "特徵: 距離/好感/上次天數"
+	_social_time_label.add_theme_font_size_override("font_size", 9)
+	_social_time_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	_social_time_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	soc_left.add_child(_social_time_label)
+
+	page_social.add_child(VSeparator.new())
+
+	# ===== 記憶欄 (右) =====
+	var mem_right: VBoxContainer = VBoxContainer.new()
+	mem_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mem_right.set("theme_override_constants/separation", 2)
+	page_social.add_child(mem_right)
+
+	var mem_title: Label = Label.new()
+	mem_title.text = "📜 靈魂記憶 (LTM/MTM/STM)"
+	mem_title.add_theme_font_size_override("font_size", 11)
+	mem_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.8))
+	mem_right.add_child(mem_title)
+
+	_ltm_label = Label.new()
+	_ltm_label.text = "特質(LTM): 隨和親切"
+	_ltm_label.add_theme_font_size_override("font_size", 9)
+	_ltm_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	_ltm_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mem_right.add_child(_ltm_label)
+
+	_mtm_label = Label.new()
+	_mtm_label.text = "人際(MTM): 尚無熟識居民"
+	_mtm_label.add_theme_font_size_override("font_size", 9)
+	_mtm_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	_mtm_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mem_right.add_child(_mtm_label)
+
+	var stm_title: Label = Label.new()
+	stm_title.text = "近期生活日誌 (STM):"
+	stm_title.add_theme_font_size_override("font_size", 9)
+	stm_title.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	mem_right.add_child(stm_title)
+
+	_stm_vbox = VBoxContainer.new()
+	_stm_vbox.set("theme_override_constants/separation", 1)
+	mem_right.add_child(_stm_vbox)
 
 	root_vbox.add_child(HSeparator.new())
 
@@ -324,8 +426,12 @@ func _update_npc_data() -> void:
 		_name_label.text = ctrl.name
 		_job_label.text = ""
 
-	_state_badge.text = ctrl.get_state_name()
-	_update_state_badge_color(ctrl.current_state)
+	if ctrl.is_dead:
+		_state_badge.text = "💀 亡故 (%s)" % ctrl.death_cause
+		_state_badge.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	else:
+		_state_badge.text = ctrl.get_state_name()
+		_update_state_badge_color(ctrl.current_state)
 
 	var nav = _get_nav_manager()
 	if nav and nav.has_method("local_to_map"):
@@ -336,20 +442,36 @@ func _update_npc_data() -> void:
 
 	# 2. AI 大腦決策
 	var dec: Dictionary = ctrl.last_decision
-	var act_name: String = String(dec.get("best_action_name", _get_action_name(ctrl.current_action_id)))
-	var poi_id: int = int(dec.get("target_location", 0))
-	_action_label.text = "行動: %s" % act_name
-	_target_poi_label.text = "地點: POI %d (%s)" % [poi_id, _get_poi_desc(poi_id)]
-
-	# 決策機制與引擎
-	var is_override: bool = bool(dec.get("is_rule_override", false))
-	if is_override:
-		var reason: String = String(dec.get("override_reason", "規則覆蓋"))
-		_override_label.text = "機制: ⚠️ %s" % reason
-		_override_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+	if ctrl.is_dead:
+		_action_label.text = "行動: 💀 停止生命活動"
+		_target_poi_label.text = "地點: ⚰️ 長眠於此"
+		_override_label.text = "機制: 💀 生命跡象終止"
+		_override_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	else:
-		_override_label.text = "機制: 🧠 神經網路自主"
-		_override_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
+		var act_name: String = String(dec.get("best_action_name", _get_action_name(ctrl.current_action_id)))
+		if ctrl.current_state == NPCControllerClass.State.MOVING:
+			match ctrl.current_action_id:
+				6: act_name = "前往社交"
+				3: act_name = "前往用餐"
+				5: act_name = "返家休息"
+				4: act_name = "前往就醫"
+				1: act_name = "前往閱讀"
+				2: act_name = "前往購物"
+				0: act_name = "外出散步" if int(dec.get("target_location", 0)) > 0 else "閒逛中"
+				7, 8: act_name = "前往執勤"
+		_action_label.text = "行動: %s" % act_name
+		var poi_id: int = int(dec.get("target_location", 0))
+		_target_poi_label.text = "地點: POI %d (%s)" % [poi_id, _get_poi_desc(poi_id)]
+
+		# 決策機制與引擎
+		var is_override: bool = bool(dec.get("is_rule_override", false))
+		if is_override:
+			var reason: String = String(dec.get("override_reason", "規則覆蓋"))
+			_override_label.text = "機制: ⚠️ %s" % reason
+			_override_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+		else:
+			_override_label.text = "機制: 🧠 神經網路自主"
+			_override_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
 
 	var global_node: Node = _get_global()
 	if global_node and global_node.has_method("get_decision_service"):
@@ -360,7 +482,10 @@ func _update_npc_data() -> void:
 			_engine_label.text = "引擎: ⚙️ GDScript MLP"
 
 	# 神經輸出評分 (Top 2)
-	_update_top_scores(dec.get("scores", PackedFloat32Array()))
+	if ctrl.is_dead:
+		_update_top_scores(PackedFloat32Array())
+	else:
+		_update_top_scores(dec.get("scores", PackedFloat32Array()))
 
 	# 3. 生理數值
 	if data:
@@ -372,9 +497,86 @@ func _update_npc_data() -> void:
 		_mood_bar.value = data.mood
 
 		_money_label.text = "💰 金錢: $ %d" % data.money
-		_inventory_label.text = "🎒 木:%d | 石:%d | 礦:%d | 作物:%d | 魚:%d | 便當:%d" % [
-			data.wood, data.stone, data.mineral, data.crops, data.fish, data.lunchbox
+		_inventory_label.text = "🎒 木:%d | 石:%d | 礦:%d | 作物:%d | 魚:%d | 料理:%d | 便當:%d" % [
+			data.wood, data.stone, data.mineral, data.crops, data.fish, data.food, data.lunchbox
 		]
+
+		# 4. 社交大腦與靈魂記憶更新 (Tab 2)
+		var decision_service = global_node.get_decision_service() if global_node and global_node.has_method("get_decision_service") else null
+		var is_social_ready: bool = decision_service.is_social_engine_available() if decision_service else false
+		if _social_engine_label:
+			if is_social_ready:
+				_social_engine_label.text = "引擎: 🚀 C# ONNX (npc_interaction_mlp)"
+				_social_engine_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
+			else:
+				_social_engine_label.text = "引擎: ⚙️ 原生降級推論"
+				_social_engine_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
+
+		var last_eval: Dictionary = data.last_social_evaluation
+		if _social_target_label:
+			if last_eval.is_empty():
+				_social_target_label.text = "對象: 尚無近期互動"
+				_social_target_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+			else:
+				var t_name: String = str(last_eval.get("target_name", "未知"))
+				var s_score: float = float(last_eval.get("score", 0.0))
+				_social_target_label.text = "對象: %s (評分: %.1f%%)" % [t_name, s_score * 100.0]
+				_social_target_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+
+		if _social_act_label:
+			if last_eval.is_empty():
+				_social_act_label.text = "行為: 待機中"
+				_social_act_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+			else:
+				var act_name: String = str(last_eval.get("action_name", "普通聊天"))
+				_social_act_label.text = "行為: %s (加權輪盤選中)" % act_name
+				_social_act_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
+
+		if _social_time_label:
+			if last_eval.is_empty():
+				_social_time_label.text = "特徵: 距離/好感/上次天數"
+			else:
+				var t_stamp: String = str(last_eval.get("timestamp", ""))
+				_social_time_label.text = "時間: %s (7維神經網絡運算)" % t_stamp
+
+		# LTM 特質
+		if _ltm_label:
+			var traits_str: String = ", ".join(data.ltm_traits) if data.ltm_traits.size() > 0 else "隨和親切"
+			_ltm_label.text = "特質(LTM): %s" % traits_str
+
+		# MTM 人際關係
+		if _mtm_label:
+			var top_friends: Array = []
+			for fid in data.friendships.keys():
+				top_friends.append({"id": fid, "f": data.friendships[fid], "t": data.get_trust(fid)})
+			top_friends.sort_custom(func(a, b): return a["f"] > b["f"])
+			if top_friends.is_empty():
+				_mtm_label.text = "人際(MTM): 尚無熟識居民"
+			else:
+				var rel_str_parts: Array[String] = []
+				for k in range(mini(2, top_friends.size())):
+					var tf = top_friends[k]
+					rel_str_parts.append("%s (好感%.0f/信%.0f)" % [tf["id"].replace("npc_", "NPC"), tf["f"], tf["t"]])
+				_mtm_label.text = "人際(MTM): %s" % " | ".join(rel_str_parts)
+
+		# STM 事件清單
+		if _stm_vbox:
+			for ch in _stm_vbox.get_children():
+				ch.queue_free()
+			if data.stm_events.is_empty():
+				var empty_lbl: Label = Label.new()
+				empty_lbl.text = "• 今日尚無特殊經歷"
+				empty_lbl.add_theme_font_size_override("font_size", 9)
+				empty_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+				_stm_vbox.add_child(empty_lbl)
+			else:
+				for k in range(mini(3, data.stm_events.size())):
+					var ev_lbl: Label = Label.new()
+					ev_lbl.text = "• %s" % data.stm_events[k]
+					ev_lbl.add_theme_font_size_override("font_size", 9)
+					ev_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+					ev_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+					_stm_vbox.add_child(ev_lbl)
 
 func _update_top_scores(scores: PackedFloat32Array) -> void:
 	for child in _score_box.get_children():

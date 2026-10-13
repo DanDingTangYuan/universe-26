@@ -89,9 +89,11 @@ signal npc_unregistered(npc_id: String)
 signal poi_registered(poi_id: int, cell_pos: Vector2i)
 
 ## NPC 開始執行行為時發射 (可供 UI 或觀測器監聽)
+@warning_ignore("unused_signal")
 signal npc_action_started(npc_id: String, action: ActionType, target_cell: Vector2i)
 
 ## NPC 完成行為時發射
+@warning_ignore("unused_signal")
 signal npc_action_completed(npc_id: String, action: ActionType)
 
 ## NPC 被玩家點選/選中時發射
@@ -99,6 +101,15 @@ signal npc_selected(npc: Node2D)
 
 ## 取消選中 NPC 時發射
 signal npc_deselected()
+
+## NPC 死亡時發射 (飢餓衰竭或體力耗盡)
+signal npc_died(npc_id: String, reason: String)
+
+## 遊戲存檔成功時發射
+signal game_saved(filepath: String)
+
+## 遊戲讀檔成功時發射
+signal game_loaded(filepath: String)
 
 # ------------------------------------------------------------------------------
 # 3. 匯出與內部變數 (Properties)
@@ -130,6 +141,9 @@ var _registered_npcs: Dictionary = {}
 
 ## 註冊的地圖興趣點字典 { poi_id: int -> Vector2i }
 var _registered_pois: Dictionary = {}
+
+## 註冊的地圖興趣點完整詮釋資料字典 { poi_id: int -> Dictionary }
+var _poi_metadata: Dictionary = {}
 
 ## 全域 AI 決策大腦服務 (NPCDecisionService)
 const DecisionServiceClass = preload("res://scripts/ai/decision_service.gd")
@@ -171,7 +185,7 @@ func _advance_one_tick() -> void:
 	
 	# 整點觸發
 	if current_tick % TICKS_PER_HOUR == 0:
-		var hour: int = current_tick / TICKS_PER_HOUR
+		var hour: int = int(float(current_tick) / float(TICKS_PER_HOUR))
 		hour_passed.emit(hour)
 
 ## 取得正規化時間 (0.0 ~ 1.0)，供神經網路作為時間特徵輸入
@@ -180,7 +194,7 @@ func get_normalized_time() -> float:
 
 ## 取得當前小時 (0 ~ 23)
 func get_current_hour() -> int:
-	return current_tick / TICKS_PER_HOUR
+	return int(float(current_tick) / float(TICKS_PER_HOUR))
 
 ## 取得當前分鐘 (0 ~ 59)
 func get_current_minute() -> int:
@@ -299,9 +313,10 @@ var _selected_npc: Node2D = null
 # 8. POI / 設施註冊中心 (Point of Interest Registry)
 # ------------------------------------------------------------------------------
 
-## 註冊興趣點 (傳入 LocationType 或自訂 ID，與地圖網格座標 Vector2i)
-func register_poi(poi_id: int, cell_pos: Vector2i) -> void:
+## 註冊興趣點 (傳入 LocationType 或自訂 ID，與地圖網格座標 Vector2i，以及可選的完整資料字典)
+func register_poi(poi_id: int, cell_pos: Vector2i, details: Dictionary = {}) -> void:
 	_registered_pois[poi_id] = cell_pos
+	_poi_metadata[poi_id] = details.duplicate()
 	poi_registered.emit(poi_id, cell_pos)
 	print("[Global] 註冊 POI 成功: ID=%d, Cell=%s" % [poi_id, str(cell_pos)])
 
@@ -311,6 +326,24 @@ func get_poi_cell(poi_id: int) -> Vector2i:
 		return _registered_pois[poi_id]
 	push_warning("[Global] 找不到對應的 POI: ID=%d" % poi_id)
 	return Vector2i(-1, -1)
+
+## 取得特定 POI 的完整設定資料 (包含 concealed, entrance_dir, radius, doors, polygon 等)
+func get_poi_data(poi_id: int) -> Dictionary:
+	if _poi_metadata.has(poi_id):
+		return _poi_metadata[poi_id].duplicate()
+	return {}
+
+## 查詢特定 POI 是否為隱藏/進入建築物設施
+func is_poi_concealed(poi_id: int) -> bool:
+	if _poi_metadata.has(poi_id):
+		return bool(_poi_metadata[poi_id].get("concealed", false))
+	return false
+
+## 取得特定 POI 的進出入口朝向 ("south", "north", "east", "west")
+func get_poi_entrance_dir(poi_id: int) -> String:
+	if _poi_metadata.has(poi_id):
+		return str(_poi_metadata[poi_id].get("entrance_dir", "south"))
+	return "south"
 
 ## 檢查特定 POI 是否已註冊
 func has_poi(poi_id: int) -> bool:
@@ -335,3 +368,103 @@ func get_decision_service() -> DecisionServiceClass:
 	if _decision_service == null:
 		_decision_service = DecisionServiceClass.new()
 	return _decision_service
+
+## NPC 死亡事件匯流排轉發
+func on_npc_died(npc_id: String, reason: String) -> void:
+	print("[Global] ⚠️ NPC 死亡公告: %s 原因: %s" % [npc_id, reason])
+	npc_died.emit(npc_id, reason)
+
+# ------------------------------------------------------------------------------
+# 10. 遊戲存檔與讀檔系統 (Save & Load System)
+# ------------------------------------------------------------------------------
+
+const DEFAULT_SAVE_PATH: String = "user://universe26_save.json"
+const DEV_SAVE_PATH: String = "res://data/savegame.json"
+
+## 儲存遊戲進度 (天數、時間、所有 NPC 實體狀態與 15 維度代謝數值)
+func save_game(filepath: String = "") -> bool:
+	var path: String = filepath if not filepath.is_empty() else DEFAULT_SAVE_PATH
+	var save_data: Dictionary = {
+		"version": "1.0",
+		"timestamp": Time.get_datetime_string_from_system(),
+		"current_day": current_day,
+		"current_tick": current_tick,
+		"formatted_time": get_formatted_time(),
+		"time_scale": time_scale,
+		"is_time_paused": is_time_paused,
+		"npcs": []
+	}
+
+	for npc in get_all_npcs():
+		if npc and is_instance_valid(npc) and npc.has_method("to_dict"):
+			save_data["npcs"].append(npc.to_dict())
+
+	var json_string: String = JSON.stringify(save_data, "\t")
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("[Global] 無法開啟存檔路徑進行寫入: " + path + " (錯誤碼: %d)" % FileAccess.get_open_error())
+		return false
+
+	file.store_string(json_string)
+	file.close()
+	print("[Global] 💾 遊戲已成功儲存至: %s (共 %d 隻 NPC)" % [path, save_data["npcs"].size()])
+
+	# 開發環境下同步鏡像至 res://data/savegame.json 方便直接查驗
+	if OS.has_feature("editor") or OS.is_debug_build():
+		var dev_file: FileAccess = FileAccess.open(DEV_SAVE_PATH, FileAccess.WRITE)
+		if dev_file != null:
+			dev_file.store_string(json_string)
+			dev_file.close()
+
+	game_saved.emit(path)
+	return true
+
+## 載入遊戲進度
+func load_game(filepath: String = "") -> bool:
+	var path: String = filepath if not filepath.is_empty() else DEFAULT_SAVE_PATH
+	if not FileAccess.file_exists(path):
+		# 若 user:// 不存在，嘗試載入 res://data/savegame.json 鏡像存檔
+		if FileAccess.file_exists(DEV_SAVE_PATH):
+			path = DEV_SAVE_PATH
+		else:
+			push_warning("[Global] 找不到可用的存檔檔案: " + path)
+			return false
+
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("[Global] 無法讀取存檔檔案: " + path)
+		return false
+
+	var content: String = file.get_as_text()
+	file.close()
+
+	var parsed = JSON.parse_string(content)
+	if parsed == null or not (parsed is Dictionary):
+		push_error("[Global] 存檔格式解析失敗 (非合法 JSON 字典)")
+		return false
+
+	var data: Dictionary = parsed as Dictionary
+	current_day = int(data.get("current_day", current_day))
+	current_tick = int(data.get("current_tick", current_tick))
+	time_scale = float(data.get("time_scale", time_scale))
+	is_time_paused = bool(data.get("is_time_paused", false))
+
+	# 還原 NPC 實體數據
+	var npcs_data: Array = data.get("npcs", [])
+	var restored_count: int = 0
+	for npc_dict in npcs_data:
+		if npc_dict is Dictionary:
+			var nid: String = String(npc_dict.get("npc_id", ""))
+			var npc_node: Node2D = get_npc(nid)
+			if npc_node and is_instance_valid(npc_node) and npc_node.has_method("from_dict"):
+				npc_node.from_dict(npc_dict)
+				restored_count += 1
+
+	print("[Global] 📂 存檔載入成功: 第 %d 天 %s, 已還原 %d 隻 NPC" % [current_day, get_formatted_time(), restored_count])
+	tick_passed.emit(current_tick)
+	day_passed.emit(current_day)
+	time_scale_changed.emit(time_scale)
+	time_paused_toggled.emit(is_time_paused)
+	game_loaded.emit(path)
+	return true
+

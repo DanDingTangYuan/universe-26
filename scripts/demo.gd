@@ -166,7 +166,7 @@ func _setup_time_hud() -> void:
 	panel.anchor_bottom = 1.0
 	panel.offset_left = 16.0
 	panel.offset_top = -48.0
-	panel.offset_right = 520.0
+	panel.offset_right = 680.0
 	panel.offset_bottom = -12.0
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	
@@ -183,7 +183,7 @@ func _setup_time_hud() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	
 	var label: Label = Label.new()
-	label.text = "💡 操作提示：[滑鼠中鍵] 拖曳平移視角 | [滾輪] 縮放 | [滑鼠左鍵] 點擊尋路 | [空白鍵] 暫停 | [1/2/4] 倍速 | [T] +1h | [M] 午夜 | [R] 重播"
+	label.text = "💡 操作提示：[滑鼠中鍵 / 方向鍵] 平移視角 | [滾輪 / Z,X] 縮放 | [滑鼠左鍵] 點擊尋路 | [空白鍵] 暫停 | [1/2/4] 倍速 | [T] +1h | [M] 午夜 | [R] 重播"
 	label.add_theme_font_size_override("font_size", 12)
 	label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.9))
 	panel.add_child(label)

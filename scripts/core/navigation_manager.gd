@@ -26,8 +26,47 @@ signal path_calculated(from_cell: Vector2i, to_cell: Vector2i, path: Array[Vecto
 ## 障礙層 TileMapLayer (用於標記實心不可通行的建築/樹木/岩石)
 @export var obstacle_layer: TileMapLayer
 
+## 尋路權重計算模式
+enum WeightStrategy {
+	ROAD_PREFERRED, ## 優先走道路 (白名單模式：在 road_atlas_coords 中的地塊權重為 1.0，其餘為 offroad_weight)
+	AVOID_GRASS ## 避開草地 (黑名單模式：在 grass_atlas_coords 中的地塊權重為 offroad_weight，其餘地塊皆為 1.0)
+}
+
 ## 是否允許斜向移動 (預設 false: 僅上下左右 4 向，避免穿牆與斜向穿插)
 @export var allow_diagonals: bool = false
+
+## 尋路加權策略 (可在編輯器 Inspector 中一鍵切換)
+@export var weight_strategy: WeightStrategy = WeightStrategy.ROAD_PREFERRED
+
+## 道路/非草地通行權重 (預設 1.0，值越小越優先行走)
+@export var road_weight: float = 1.0
+
+## 草地/非道路通行權重 (預設 3.0，使 A* 尋路大幅偏好走在道路上)
+@export var offroad_weight: float = 3.0
+
+## 定義為道路或鋪設地磚之圖塊 Atlas 座標清單 (白名單模式使用)
+@export var road_atlas_coords: Array[Vector2i] = [
+	Vector2i(7, 5), # 主道路
+	Vector2i(1, 54), # 石板路 (廣場核心地磚)
+	Vector2i(4, 39), # 木棧道 (釣魚場碼頭)
+	# 石板路/廣場外圍九宮格收邊地磚
+	Vector2i(0, 53), Vector2i(1, 53), Vector2i(2, 53),
+	Vector2i(0, 54),                 Vector2i(2, 54),
+	Vector2i(0, 55), Vector2i(1, 55), Vector2i(2, 55),
+	# 廣場中心特色地磚
+	Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0),
+	Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1), Vector2i(4, 1),
+	Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)
+]
+
+## 定義為草地之圖塊 Atlas 座標清單 (黑名單模式使用，加重通行代價避免亂走草地)
+@export var grass_atlas_coords: Array[Vector2i] = [
+	Vector2i(1, 4), # 一般草地主體
+	Vector2i(5, 0), # 帶花草地裝飾 1
+	Vector2i(5, 1), # 帶花草地裝飾 2
+	Vector2i(5, 2), # 帶花草地裝飾 3
+	Vector2i(6, 2)  # 帶花草地裝飾 4
+]
 
 ## 內部 AStarGrid2D 實例
 var astar: AStarGrid2D = null
@@ -111,7 +150,17 @@ func initialize_grid() -> void:
 	
 	for cell: Vector2i in ground_cells:
 		var is_solid: bool = false
-		var walk_weight: float = 1.0
+		var atlas_coords: Vector2i = ground_layer.get_cell_atlas_coords(cell)
+		
+		# 依據所選策略決定基礎通行權重
+		var walk_weight: float = road_weight
+		match weight_strategy:
+			WeightStrategy.ROAD_PREFERRED:
+				var is_road: bool = atlas_coords in road_atlas_coords
+				walk_weight = road_weight if is_road else offroad_weight
+			WeightStrategy.AVOID_GRASS:
+				var is_grass: bool = atlas_coords in grass_atlas_coords
+				walk_weight = offroad_weight if is_grass else road_weight
 
 		if ground_has_custom:
 			var tile_data: TileData = ground_layer.get_cell_tile_data(cell)
@@ -257,3 +306,26 @@ func get_random_walkable_cell() -> Vector2i:
 	if _walkable_cells.is_empty():
 		return Vector2i.ZERO
 	return _walkable_cells[randi() % _walkable_cells.size()]
+
+## 檢查指定網格是否屬於道路/低通行代價地塊
+func is_road_cell(cell: Vector2i) -> bool:
+	if ground_layer == null:
+		return false
+	var atlas_coords: Vector2i = ground_layer.get_cell_atlas_coords(cell)
+	match weight_strategy:
+		WeightStrategy.ROAD_PREFERRED:
+			return atlas_coords in road_atlas_coords
+		WeightStrategy.AVOID_GRASS:
+			return not (atlas_coords in grass_atlas_coords)
+	return false
+
+## 取得指定網格地塊的尋路權重
+func get_cell_weight(cell: Vector2i) -> float:
+	if astar == null or not astar.is_in_boundsv(cell):
+		return 0.0
+	return astar.get_point_weight_scale(cell)
+
+## 動態設定指定網格地塊的尋路權重
+func set_cell_weight(cell: Vector2i, weight: float) -> void:
+	if astar and astar.is_in_boundsv(cell):
+		astar.set_point_weight_scale(cell, weight)

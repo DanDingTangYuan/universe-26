@@ -1,0 +1,1650 @@
+{
+	"current_day": 11,
+	"current_tick": 724,
+	"formatted_time": "12:04",
+	"is_time_paused": true,
+	"npcs": [
+		{
+			"current_action_id": 7,
+			"current_state": 3,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				1096.0,
+				24.0
+			],
+			"grid_position": [
+				68,
+				1
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_04": 52.5,
+					"npc_05": 55.5,
+					"npc_06": 55.5,
+					"npc_09": 52.5,
+					"npc_11": 52.5,
+					"npc_12": 52.5
+				},
+				"health": 69.3999999999996,
+				"home_poi_id": 1,
+				"hp": 100.0,
+				"hunger": 12.7000000000103,
+				"job_id": 1,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 8,
+				"money": 475,
+				"mood": 95.9400000000002,
+				"npc_id": "npc_01",
+				"npc_name": "Alex",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 50.5450000000048,
+				"stamina": 35.2899999999998,
+				"stm_events": [
+					"06:55 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:17 就地食用便當/糧食"
+				],
+				"stone": 10,
+				"trust": {
+					"npc_04": 52.0,
+					"npc_05": 54.0,
+					"npc_06": 54.0,
+					"npc_09": 52.0,
+					"npc_11": 52.0,
+					"npc_12": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 15
+			},
+			"npc_id": "npc_01"
+		},
+		{
+			"current_action_id": 7,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "up",
+			"global_position": [
+				712.0,
+				464.727264404297
+			],
+			"grid_position": [
+				44,
+				29
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_12": 52.5,
+					"npc_14": 52.5,
+					"npc_17": 52.5,
+					"npc_18": 58.5,
+					"npc_20": 52.5
+				},
+				"health": 71.7999999999983,
+				"home_poi_id": 2,
+				"hp": 100.0,
+				"hunger": 10.5500000000018,
+				"job_id": 1,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 7,
+				"money": 448,
+				"mood": 96.8000000000001,
+				"npc_id": "npc_02",
+				"npc_name": "Bob",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 68.1950000000089,
+				"stamina": 44.0399999999997,
+				"stm_events": [
+					"06:44 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔"
+				],
+				"stone": 9,
+				"trust": {
+					"npc_12": 52.0,
+					"npc_14": 52.0,
+					"npc_17": 52.0,
+					"npc_18": 56.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 15
+			},
+			"npc_id": "npc_02"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				984.0,
+				152.0
+			],
+			"grid_position": [
+				61,
+				9
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_05": 52.5,
+					"npc_10": 52.5,
+					"npc_11": 52.5,
+					"npc_16": 52.5,
+					"npc_18": 52.5,
+					"npc_20": 52.5
+				},
+				"health": 52.199999999998,
+				"home_poi_id": 3,
+				"hp": 100.0,
+				"hunger": 11.100000000001,
+				"job_id": 2,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 454,
+				"mood": 98.32,
+				"npc_id": "npc_03",
+				"npc_name": "Clara",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 43.4650000000331,
+				"stamina": 45.7999999999997,
+				"stm_events": [
+					"07:07 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"21:26 就地食用便當/糧食",
+					"12:39 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_05": 52.0,
+					"npc_10": 52.0,
+					"npc_11": 52.0,
+					"npc_16": 52.0,
+					"npc_18": 52.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 19
+			},
+			"npc_id": "npc_03"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				776.0,
+				696.0
+			],
+			"grid_position": [
+				48,
+				43
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 52.5,
+					"npc_08": 52.5,
+					"npc_09": 52.5,
+					"npc_15": 52.5,
+					"npc_17": 52.5
+				},
+				"health": 96.3999999999999,
+				"home_poi_id": 4,
+				"hp": 100.0,
+				"hunger": 9.35000000000108,
+				"job_id": 2,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 419,
+				"mood": 99.6,
+				"npc_id": "npc_04",
+				"npc_name": "David",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 50.4950000000328,
+				"stamina": 40.4799999999997,
+				"stm_events": [
+					"06:33 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"20:51 就地食用便當/糧食",
+					"12:37 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 52.0,
+					"npc_08": 52.0,
+					"npc_09": 52.0,
+					"npc_15": 52.0,
+					"npc_17": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 19
+			},
+			"npc_id": "npc_04"
+		},
+		{
+			"current_action_id": 0,
+			"current_state": 0,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				136.0,
+				552.0
+			],
+			"grid_position": [
+				8,
+				34
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 55.5,
+					"npc_03": 52.5,
+					"npc_07": 55.5,
+					"npc_08": 52.5,
+					"npc_12": 52.5,
+					"npc_13": 52.5
+				},
+				"health": 92.9999999999999,
+				"home_poi_id": 5,
+				"hp": 89.5000000000001,
+				"hunger": 28.5000000000041,
+				"job_id": 3,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 141,
+				"mood": 67.6800000000034,
+				"npc_id": "npc_05",
+				"npc_name": "Elena",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 22.7200000000066,
+				"stamina": 8.61999999999863,
+				"stm_events": [
+					"第 11 天午夜：進行思緒重整與記憶歸檔"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 54.0,
+					"npc_03": 52.0,
+					"npc_07": 54.0,
+					"npc_08": 52.0,
+					"npc_12": 52.0,
+					"npc_13": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 17
+			},
+			"npc_id": "npc_05"
+		},
+		{
+			"current_action_id": 0,
+			"current_state": 0,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				360.0,
+				712.0
+			],
+			"grid_position": [
+				22,
+				44
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 55.5,
+					"npc_09": 52.5,
+					"npc_10": 52.5,
+					"npc_11": 52.5,
+					"npc_14": 52.5,
+					"npc_15": 52.5,
+					"npc_16": 52.5,
+					"npc_18": 52.5,
+					"npc_19": 55.5,
+					"npc_20": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 5,
+				"hp": 100.0,
+				"hunger": 44.4500000000035,
+				"job_id": 3,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 165,
+				"mood": 99.82,
+				"npc_id": "npc_06",
+				"npc_name": "Frank",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 52.8100000000055,
+				"stamina": 66.1699999999996,
+				"stm_events": [
+					"10:20 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:03 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 54.0,
+					"npc_09": 52.0,
+					"npc_10": 52.0,
+					"npc_11": 52.0,
+					"npc_14": 52.0,
+					"npc_15": 52.0,
+					"npc_16": 52.0,
+					"npc_18": 52.0,
+					"npc_19": 54.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 17
+			},
+			"npc_id": "npc_06"
+		},
+		{
+			"current_action_id": 7,
+			"current_state": 3,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				568.0,
+				680.0
+			],
+			"grid_position": [
+				35,
+				42
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 2,
+				"fish": 0,
+				"food": 109,
+				"friendships": {
+					"npc_05": 55.5,
+					"npc_08": 52.5,
+					"npc_10": 52.5,
+					"npc_12": 52.5,
+					"npc_18": 52.5
+				},
+				"health": 83.1999999999998,
+				"home_poi_id": 6,
+				"hp": 88.9000000000001,
+				"hunger": 13.5500000000007,
+				"job_id": 4,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 80,
+				"mineral": 0,
+				"money": 501,
+				"mood": 96.8800000000002,
+				"npc_id": "npc_07",
+				"npc_name": "Grace",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 19.6450000000229,
+				"stamina": 42.3499999999997,
+				"stm_events": [
+					"06:35 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:09 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_05": 54.0,
+					"npc_08": 52.0,
+					"npc_10": 52.0,
+					"npc_12": 52.0,
+					"npc_18": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 13
+			},
+			"npc_id": "npc_07"
+		},
+		{
+			"current_action_id": 7,
+			"current_state": 3,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				568.0,
+				680.0
+			],
+			"grid_position": [
+				35,
+				42
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 94,
+				"friendships": {
+					"npc_04": 52.5,
+					"npc_05": 52.5,
+					"npc_07": 52.5,
+					"npc_12": 55.5,
+					"npc_13": 52.5,
+					"npc_15": 52.5,
+					"npc_19": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 7,
+				"hp": 100.0,
+				"hunger": 29.5000000000025,
+				"job_id": 4,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 62,
+				"mineral": 0,
+				"money": 433,
+				"mood": 98.7000000000003,
+				"npc_id": "npc_08",
+				"npc_name": "Henry",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 34.1300000000149,
+				"stamina": 47.2799999999997,
+				"stm_events": [
+					"06:18 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:11 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_04": 52.0,
+					"npc_05": 52.0,
+					"npc_07": 52.0,
+					"npc_12": 54.0,
+					"npc_13": 52.0,
+					"npc_15": 52.0,
+					"npc_19": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 13
+			},
+			"npc_id": "npc_08"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				472.0,
+				152.0
+			],
+			"grid_position": [
+				29,
+				9
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 52.5,
+					"npc_04": 52.5,
+					"npc_06": 52.5,
+					"npc_10": 52.5,
+					"npc_19": 52.5,
+					"npc_20": 55.5
+				},
+				"health": 100.0,
+				"home_poi_id": 8,
+				"hp": 100.0,
+				"hunger": 97.9000000000001,
+				"job_id": 5,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 1,
+				"mineral": 0,
+				"money": 1090,
+				"mood": 99.7200000000001,
+				"npc_id": "npc_09",
+				"npc_name": "Ivy",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 57.4800000000139,
+				"stamina": 51.5899999999999,
+				"stm_events": [
+					"第 11 天午夜：進行思緒重整與記憶歸檔"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 52.0,
+					"npc_04": 52.0,
+					"npc_06": 52.0,
+					"npc_10": 52.0,
+					"npc_19": 52.0,
+					"npc_20": 54.0
+				},
+				"wood": 0,
+				"work_poi_id": 18
+			},
+			"npc_id": "npc_09"
+		},
+		{
+			"current_action_id": 7,
+			"current_state": 3,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				840.0,
+				104.0
+			],
+			"grid_position": [
+				52,
+				6
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_03": 52.5,
+					"npc_06": 52.5,
+					"npc_07": 52.5,
+					"npc_09": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 9,
+				"hp": 100.0,
+				"hunger": 50.7500000000028,
+				"job_id": 5,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 883,
+				"mood": 23.5800000000021,
+				"npc_id": "npc_10",
+				"npc_name": "Jack",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 11.8100000000328,
+				"stamina": 0.0,
+				"stm_events": [
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:13 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_03": 52.0,
+					"npc_06": 52.0,
+					"npc_07": 52.0,
+					"npc_09": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 18
+			},
+			"npc_id": "npc_10"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				984.0,
+				440.0
+			],
+			"grid_position": [
+				61,
+				27
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 52.5,
+					"npc_03": 52.5,
+					"npc_06": 52.5,
+					"npc_13": 52.5,
+					"npc_16": 52.5,
+					"npc_17": 55.5
+				},
+				"health": 92.3999999999999,
+				"home_poi_id": 10,
+				"hp": 100.0,
+				"hunger": 35.950000000019,
+				"job_id": 6,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 471,
+				"mood": 99.76,
+				"npc_id": "npc_11",
+				"npc_name": "Kelly",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 72.3400000000344,
+				"stamina": 46.7299999999997,
+				"stm_events": [
+					"08:00 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 52.0,
+					"npc_03": 52.0,
+					"npc_06": 52.0,
+					"npc_13": 52.0,
+					"npc_16": 52.0,
+					"npc_17": 54.0
+				},
+				"wood": 9,
+				"work_poi_id": 14
+			},
+			"npc_id": "npc_11"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				984.0,
+				440.0
+			],
+			"grid_position": [
+				61,
+				27
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_01": 52.5,
+					"npc_02": 52.5,
+					"npc_05": 52.5,
+					"npc_07": 52.5,
+					"npc_08": 55.5,
+					"npc_17": 52.5
+				},
+				"health": 84.7999999999998,
+				"home_poi_id": 10,
+				"hp": 100.0,
+				"hunger": 33.8000000000224,
+				"job_id": 6,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 457,
+				"mood": 99.76,
+				"npc_id": "npc_12",
+				"npc_name": "Leo",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 68.0750000000343,
+				"stamina": 42.2899999999995,
+				"stm_events": [
+					"07:20 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:23 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_01": 52.0,
+					"npc_02": 52.0,
+					"npc_05": 52.0,
+					"npc_07": 52.0,
+					"npc_08": 54.0,
+					"npc_17": 52.0
+				},
+				"wood": 9,
+				"work_poi_id": 14
+			},
+			"npc_id": "npc_12"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 4,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				728.0,
+				760.0
+			],
+			"grid_position": [
+				45,
+				47
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 12,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_05": 52.5,
+					"npc_08": 52.5,
+					"npc_11": 52.5,
+					"npc_20": 52.5
+				},
+				"health": 65.1999999999971,
+				"home_poi_id": 11,
+				"hp": 85.6000000000003,
+				"hunger": 0.0,
+				"job_id": 7,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 965,
+				"mood": 98.48,
+				"npc_id": "npc_13",
+				"npc_name": "Mia",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 36.4000000000338,
+				"stamina": 47.6399999999998,
+				"stm_events": [
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"22:05 就地食用便當/糧食",
+					"12:35 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_05": 52.0,
+					"npc_08": 52.0,
+					"npc_11": 52.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 16
+			},
+			"npc_id": "npc_13"
+		},
+		{
+			"current_action_id": 5,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "right",
+			"global_position": [
+				680.0,
+				712.0
+			],
+			"grid_position": [
+				42,
+				44
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 11,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_02": 52.5,
+					"npc_06": 52.5,
+					"npc_17": 52.5
+				},
+				"health": 71.3999999999977,
+				"home_poi_id": 11,
+				"hp": 79.6000000000002,
+				"hunger": 0.0,
+				"job_id": 7,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 917,
+				"mood": 88.1600000000003,
+				"npc_id": "npc_14",
+				"npc_name": "Noah",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 39.1250000000341,
+				"stamina": 7.91999999999979,
+				"stm_events": [
+					"06:29 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_02": 52.0,
+					"npc_06": 52.0,
+					"npc_17": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 16
+			},
+			"npc_id": "npc_14"
+		},
+		{
+			"current_action_id": 8,
+			"current_state": 3,
+			"death_cause": "",
+			"facing_direction": "north",
+			"global_position": [
+				424.0,
+				440.0
+			],
+			"grid_position": [
+				26,
+				27
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_04": 52.5,
+					"npc_06": 52.5,
+					"npc_08": 52.5,
+					"npc_16": 52.5,
+					"npc_17": 52.5
+				},
+				"health": 69.1999999999969,
+				"home_poi_id": 12,
+				"hp": 100.0,
+				"hunger": 14.1000000000021,
+				"job_id": 8,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 1571,
+				"mood": 97.2200000000003,
+				"npc_id": "npc_15",
+				"npc_name": "Olivia",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 52.270000000029,
+				"stamina": 7.06999999999992,
+				"stm_events": [
+					"07:56 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"21:58 就地食用便當/糧食",
+					"12:16 就地食用便當/糧食",
+					"12:12 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_04": 52.0,
+					"npc_06": 52.0,
+					"npc_08": 52.0,
+					"npc_16": 52.0,
+					"npc_17": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 12
+			},
+			"npc_id": "npc_15"
+		},
+		{
+			"current_action_id": 0,
+			"current_state": 0,
+			"death_cause": "",
+			"facing_direction": "south",
+			"global_position": [
+				456.0,
+				680.0
+			],
+			"grid_position": [
+				28,
+				42
+			],
+			"is_concealed": true,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_03": 52.5,
+					"npc_06": 52.5,
+					"npc_11": 52.5,
+					"npc_15": 52.5,
+					"npc_17": 55.5
+				},
+				"health": 100.0,
+				"home_poi_id": 2,
+				"hp": 100.0,
+				"hunger": 29.6500000000038,
+				"job_id": 9,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 146,
+				"mood": 80.5000000000039,
+				"npc_id": "npc_16",
+				"npc_name": "Peter",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 48.2800000000177,
+				"stamina": 29.7899999999984,
+				"stm_events": [
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:17 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_03": 52.0,
+					"npc_06": 52.0,
+					"npc_11": 52.0,
+					"npc_15": 52.0,
+					"npc_17": 54.0
+				},
+				"wood": 0,
+				"work_poi_id": 0
+			},
+			"npc_id": "npc_16"
+		},
+		{
+			"current_action_id": 0,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "up",
+			"global_position": [
+				776.0,
+				408.0
+			],
+			"grid_position": [
+				48,
+				25
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_02": 52.5,
+					"npc_04": 52.5,
+					"npc_11": 55.5,
+					"npc_12": 52.5,
+					"npc_14": 52.5,
+					"npc_15": 52.5,
+					"npc_16": 55.5,
+					"npc_20": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 3,
+				"hp": 100.0,
+				"hunger": 74.550000000004,
+				"job_id": 9,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 163,
+				"mood": 99.3800000000001,
+				"npc_id": "npc_17",
+				"npc_name": "Quinn",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 83.8300000000016,
+				"stamina": 86.2899999999996,
+				"stm_events": [
+					"09:44 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:33 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_02": 52.0,
+					"npc_04": 52.0,
+					"npc_11": 54.0,
+					"npc_12": 52.0,
+					"npc_14": 52.0,
+					"npc_15": 52.0,
+					"npc_16": 54.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 0
+			},
+			"npc_id": "npc_17"
+		},
+		{
+			"current_action_id": 3,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "down",
+			"global_position": [
+				488.0,
+				703.272705078125
+			],
+			"grid_position": [
+				30,
+				43
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_02": 58.5,
+					"npc_03": 52.5,
+					"npc_06": 52.5,
+					"npc_07": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 4,
+				"hp": 100.0,
+				"hunger": 75.950000000004,
+				"job_id": 9,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 133,
+				"mood": 99.76,
+				"npc_id": "npc_18",
+				"npc_name": "Ruby",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 73.9850000000308,
+				"stamina": 84.4099999999996,
+				"stm_events": [
+					"09:39 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:21 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_02": 56.0,
+					"npc_03": 52.0,
+					"npc_06": 52.0,
+					"npc_07": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 0
+			},
+			"npc_id": "npc_18"
+		},
+		{
+			"current_action_id": 3,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "right",
+			"global_position": [
+				193.696975708008,
+				520.0
+			],
+			"grid_position": [
+				12,
+				32
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_06": 55.5,
+					"npc_08": 52.5,
+					"npc_09": 52.5,
+					"npc_20": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 6,
+				"hp": 100.0,
+				"hunger": 73.7500000000041,
+				"job_id": 9,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 153,
+				"mood": 99.7400000000001,
+				"npc_id": "npc_19",
+				"npc_name": "Sam",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 79.2000000000371,
+				"stamina": 80.2699999999998,
+				"stm_events": [
+					"08:53 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:26 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_06": 54.0,
+					"npc_08": 52.0,
+					"npc_09": 52.0,
+					"npc_20": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 0
+			},
+			"npc_id": "npc_19"
+		},
+		{
+			"current_action_id": 0,
+			"current_state": 1,
+			"death_cause": "",
+			"facing_direction": "right",
+			"global_position": [
+				742.545471191406,
+				440.0
+			],
+			"grid_position": [
+				46,
+				27
+			],
+			"is_concealed": false,
+			"is_dead": false,
+			"npc_data": {
+				"avatar_texture_path": "",
+				"crops": 0,
+				"fish": 0,
+				"food": 0,
+				"friendships": {
+					"npc_02": 52.5,
+					"npc_03": 52.5,
+					"npc_06": 52.5,
+					"npc_09": 55.5,
+					"npc_13": 52.5,
+					"npc_17": 52.5,
+					"npc_19": 52.5
+				},
+				"health": 100.0,
+				"home_poi_id": 7,
+				"hp": 100.0,
+				"hunger": 75.250000000004,
+				"job_id": 9,
+				"last_interaction_days": {},
+				"last_social_evaluation": {},
+				"ltm_traits": [
+					"勤奮採掘",
+					"耐力堅韌"
+				],
+				"lunchbox": 0,
+				"mineral": 0,
+				"money": 193,
+				"mood": 99.2800000000001,
+				"npc_id": "npc_20",
+				"npc_name": "Tina",
+				"personality_offset": [
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0,
+					0.0
+				],
+				"social_desire": 66.85500000001,
+				"stamina": 86.2899999999996,
+				"stm_events": [
+					"09:47 就地食用便當/糧食",
+					"第 11 天午夜：進行思緒重整與記憶歸檔",
+					"12:15 就地食用便當/糧食"
+				],
+				"stone": 0,
+				"trust": {
+					"npc_02": 52.0,
+					"npc_03": 52.0,
+					"npc_06": 52.0,
+					"npc_09": 54.0,
+					"npc_13": 52.0,
+					"npc_17": 52.0,
+					"npc_19": 52.0
+				},
+				"wood": 0,
+				"work_poi_id": 0
+			},
+			"npc_id": "npc_20"
+		}
+	],
+	"time_scale": 4.0,
+	"timestamp": "2026-10-13T11:59:15",
+	"version": "1.0"
+}

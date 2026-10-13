@@ -116,6 +116,18 @@ const FEATURE_NAMES: Array[String] = [
 ## 與其他 NPC 之信任度字典 { "npc_2": 50.0 }，預設 50.0
 @export var trust: Dictionary = {}
 
+## 短期記憶 (STM - Short-Term Memory)：單日重大生活事件清單 (最多保留 5 筆)
+@export var stm_events: Array[String] = []
+
+## 記憶與互動天數追蹤 { "npc_01": 0 } (記錄上次與各 NPC 互動之遊戲天數)
+@export var last_interaction_days: Dictionary = {}
+
+## 長期性格特質 (LTM - Long-Term Memory)：靈魂性格標籤
+@export var ltm_traits: Array[String] = []
+
+## 最近一次社交模型 (ONNX) 評估快取 (含候選人分數與選定行為)
+@export var last_social_evaluation: Dictionary = {}
+
 ## 動態修飾器陣列 (符合 AGENTS.md 規範: 實體需帶有 Modifiers 陣列)
 ## 每項為 Dictionary: { "id": String, "stat": String, "value_per_tick": float, "duration": int }
 var modifiers: Array[Dictionary] = []
@@ -131,6 +143,22 @@ func _init() -> void:
 	if personality_offset.is_empty():
 		personality_offset.resize(15)
 		personality_offset.fill(0.0)
+	if ltm_traits.is_empty():
+		_init_default_traits()
+
+## 依職業或預設建立靈魂性格特質標籤
+func _init_default_traits() -> void:
+	match job_id:
+		1: ltm_traits = ["勤奮採掘", "耐力堅韌"]
+		2: ltm_traits = ["沉靜好學", "重視知識"]
+		3: ltm_traits = ["沉穩耐心", "喜愛水域"]
+		4: ltm_traits = ["熱情好客", "擅長烹調"]
+		5: ltm_traits = ["仁心仁術", "注重健康"]
+		6: ltm_traits = ["質樸剛健", "熱愛森林"]
+		7: ltm_traits = ["辛勤耕耘", "順應天時"]
+		8: ltm_traits = ["精打細算", "善於社交"]
+		9: ltm_traits = ["顧家溫暖", "隨和親切"]
+		_: ltm_traits = ["自由自在", "樂於探索"]
 
 # ------------------------------------------------------------------------------
 # 7. 代謝模擬 (Tick-Based Simulation)
@@ -158,11 +186,12 @@ func tick_update(delta_ticks: int = 1, is_sleeping: bool = false, is_working: bo
 	if not is_sleeping:
 		social_desire = clampf(social_desire - (SOCIAL_DECAY_PER_TICK * d), MIN_STAT, MAX_STAT)
 
-	# 4. 健康度與生命值聯動 (飢餓飢荒/生病扣血，飽腹健康回血)
+	# 4. 健康度與生命值聯動 (飢荒扣血，健康過低扣血，飽腹健康回血)
 	if hunger <= 0.0:
-		health = clampf(health - (0.1 * d), MIN_STAT, MAX_STAT)
-		if health < 30.0:
-			hp = clampf(hp - (0.15 * d), MIN_STAT, MAX_STAT)
+		health = clampf(health - (0.2 * d), MIN_STAT, MAX_STAT)
+		hp = clampf(hp - (0.3 * d), MIN_STAT, MAX_STAT)
+	if health < 20.0:
+		hp = clampf(hp - (0.15 * d), MIN_STAT, MAX_STAT)
 	elif health > 70.0 and hunger > 50.0 and hp < MAX_STAT and is_sleeping:
 		# 睡眠且健康良好時自癒
 		hp = clampf(hp + (0.05 * d), MIN_STAT, MAX_STAT)
@@ -259,6 +288,10 @@ func to_dict() -> Dictionary:
 		"lunchbox": lunchbox,
 		"friendships": friendships.duplicate(),
 		"trust": trust.duplicate(),
+		"stm_events": stm_events.duplicate(),
+		"last_interaction_days": last_interaction_days.duplicate(),
+		"ltm_traits": ltm_traits.duplicate(),
+		"last_social_evaluation": last_social_evaluation.duplicate(),
 		"personality_offset": Array(personality_offset)
 	}
 
@@ -291,6 +324,18 @@ func from_dict(data: Dictionary) -> void:
 		friendships = data["friendships"].duplicate()
 	if data.has("trust") and data["trust"] is Dictionary:
 		trust = data["trust"].duplicate()
+	if data.has("stm_events") and data["stm_events"] is Array:
+		stm_events.clear()
+		for ev in data["stm_events"]:
+			stm_events.append(str(ev))
+	if data.has("last_interaction_days") and data["last_interaction_days"] is Dictionary:
+		last_interaction_days = data["last_interaction_days"].duplicate()
+	if data.has("ltm_traits") and data["ltm_traits"] is Array:
+		ltm_traits.clear()
+		for tr in data["ltm_traits"]:
+			ltm_traits.append(str(tr))
+	if data.has("last_social_evaluation") and data["last_social_evaluation"] is Dictionary:
+		last_social_evaluation = data["last_social_evaluation"].duplicate()
 
 	if data.has("personality_offset") and data["personality_offset"] is Array:
 		var arr: Array = data["personality_offset"]
@@ -396,6 +441,33 @@ func modify_relationship(target_id: String, delta_friendship: float, delta_trust
 	trust[target_id] = new_t
 
 	relationship_changed.emit(npc_id, target_id, new_f, new_t)
+
+## 新增短期生活事件記憶 (STM)
+func add_stm_event(event_text: String) -> void:
+	stm_events.push_front(event_text)
+	if stm_events.size() > 5:
+		stm_events.resize(5)
+
+## 取得距離上次與特定 NPC 互動的天數 (預設 3.0，範圍 0.0 ~ 10.0)
+func get_days_since_interaction(target_id: String, current_day: int) -> float:
+	if not last_interaction_days.has(target_id):
+		return 3.0
+	var last_day: int = int(last_interaction_days[target_id])
+	return clampf(float(current_day - last_day), 0.0, 10.0)
+
+## 記錄與特定 NPC 發生互動
+func record_interaction(target_id: String, current_day: int) -> void:
+	last_interaction_days[target_id] = current_day
+
+## 每日午夜記憶演化 (LTM / MTM / STM 結算)
+func evolve_midnight_memory(day: int) -> void:
+	# 1. 關係自然平緩 (MTM)：好感度向 50.0 溫和收斂
+	for t_id in friendships.keys():
+		var f: float = float(friendships[t_id])
+		friendships[t_id] = move_toward(f, 50.0, 0.5)
+
+	# 2. 結算當日經歷並沉澱思緒
+	add_stm_event("第 %d 天午夜：進行思緒重整與記憶歸檔" % day)
 
 # ------------------------------------------------------------------------------
 # 11. 動態修飾器系統 (Modifiers)

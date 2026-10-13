@@ -14,9 +14,11 @@
   - [1.5 NPC 註冊與查詢 API](#15-npc-註冊與查詢-api)
   - [1.6 POI / 設施註冊 API](#16-poi--設施註冊-api)
   - [1.7 工具輔助 API](#17-工具輔助-api)
+  - [1.8 存讀檔系統與死亡公告 API](#18-存讀檔系統與死亡公告-api)
 - [2. 導航管理器：NavigationManager (scripts/core/navigation_manager.gd)](#2-導航管理器navigationmanager-scriptscorenavigation_managergd)
   - [2.1 訊號](#21-訊號)
-  - [2.2 核心方法](#22-核心方法)
+  - [2.2 匯出參數 (Exports)](#22-匯出參數-exports)
+  - [2.3 核心方法 (Core & Public Methods)](#23-核心方法-core--public-methods)
 - [3. 頂部時間 HUD：TimeHUD (scene/ui/time_hud.tscn, scripts/ui/time_hud.gd)](#3-頂部時間-hudtimehud-sceneuitime_hudtscn-scriptsuitime_hudgd)
   - [3.1 職責與結構](#31-職責與結構)
   - [3.2 公開方法與回呼](#32-公開方法與回呼)
@@ -39,6 +41,7 @@
   - [7.2 匯出參數 (Exports)](#72-匯出參數-exports)
   - [7.3 訊號 (Signals)](#73-訊號-signals)
   - [7.4 公開方法 (Public Methods)](#74-公開方法-public-methods)
+  - [7.5 行為反饋與生理代謝模擬閉環](#75-行為反饋與生理代謝模擬閉環)
 
 ---
 
@@ -107,6 +110,9 @@ enum LocationType {
 | `npc_action_completed` | `npc_id: String, action: ActionType`                        | NPC 完成行動時廣播                                     |
 | `npc_selected`         | `npc: Node2D`                                               | 玩家點選/選中某 NPC 時廣播 (供觀測 HUD 綁定)           |
 | `npc_deselected`       | (無)                                                        | 取消選中 NPC 時廣播                                    |
+| `npc_died`             | `npc_id: String, reason: String`                            | NPC 死亡時廣播 (飢餓衰竭或體力耗盡)                    |
+| `game_saved`           | `filepath: String`                                          | 遊戲存檔成功寫入檔案時廣播                             |
+| `game_loaded`          | `filepath: String`                                          | 遊戲存檔成功讀取並還原時廣播                           |
 
 ---
 
@@ -205,13 +211,25 @@ enum LocationType {
 
 ### 1.6 POI / 設施註冊 API
 
-#### `register_poi(poi_id: int, cell_pos: Vector2i) -> void`
+#### `register_poi(poi_id: int, cell_pos: Vector2i, details: Dictionary = {}) -> void`
 
-- **說明**：註冊設施類型與網格座標（例如 `register_poi(Global.LocationType.RESTAURANT, Vector2i(10, 15))`）。
+- **說明**：註冊設施類型、網格座標與完整進階設定字典（包含 `concealed`, `entrance_dir`, `radius`, `doors`, `polygon`, `walkable_cells`）。
 
 #### `get_poi_cell(poi_id: int) -> Vector2i`
 
 - **說明**：取得特定設施的網格座標。若不存在則回傳 `Vector2i(-1, -1)`。
+
+#### `get_poi_data(poi_id: int) -> Dictionary`
+
+- **說明**：取得特定設施的完整設定字典副本。若不存在則回傳 `{}`。
+
+#### `is_poi_concealed(poi_id: int) -> bool`
+
+- **說明**：查詢特定設施是否為進屋/進林隱藏類型（如伐木場、礦場、自宅、商店等）。
+
+#### `get_poi_entrance_dir(poi_id: int) -> String`
+
+- **說明**：取得特定設施門口朝向（如 `"south"`, `"north"`, `"east"`, `"west"`），預設 `"south"`。
 
 #### `has_poi(poi_id: int) -> bool`
 
@@ -235,6 +253,25 @@ enum LocationType {
 
 ---
 
+### 1.8 存讀檔系統與死亡公告 API
+
+#### `save_game(filepath: String = "") -> bool`
+
+- **說明**：將當前遊戲時間、天數、倍速、暫停狀態以及所有場上 NPC 之座標、狀態機、面向、隱藏狀態、死亡狀態與 15 維度生理數值、背包庫存、人際關係完整序列化儲存為 JSON。
+- **預設路徑**：`user://universe26_save.json`，於編輯器與 Debug 環境下自動同步鏡像至 `res://data/savegame.json` 方便即時檢閱。
+- **回傳值**：成功寫入檔案回傳 `true`，並發射 `game_saved(filepath)` 全域訊號。
+
+#### `load_game(filepath: String = "") -> bool`
+
+- **說明**：讀取指定 JSON 存檔，還原世界時間、天數、流速倍率，並將所有註冊的 NPC 實體還原至存檔時之確切世界座標、朝向、狀態與 15 維度數據（包括死亡狀態倒地展演）。
+- **回傳值**：成功還原回傳 `true`，並發射 `game_loaded(filepath)` 全域訊號。
+
+#### `on_npc_died(npc_id: String, reason: String) -> void`
+
+- **說明**：供 `NPCController` 於個體生命值歸零時呼叫，列印死亡紀錄並向全域發射 `npc_died(npc_id, reason)` 訊號。
+
+---
+
 ## 2. 導航管理器：NavigationManager (`scripts/core/navigation_manager.gd`)
 
 封裝 Godot 4 原生 `AStarGrid2D`，自動讀取多層 `TileMapLayer`，管理網格尋路與阻擋。
@@ -246,14 +283,42 @@ enum LocationType {
 | `grid_initialized` | `total_cells: int, walkable_cells: int`                         | A\* 網格初始化完成時發射，回報總格數與可行走格數 |
 | `path_calculated`  | `from_cell: Vector2i, to_cell: Vector2i, path: Array[Vector2i]` | 成功計算兩點間網格路徑時發射                     |
 
-### 2.2 核心方法
+### 2.2 匯出參數 (Exports)
+
+| 屬性名稱             | 型別                | 預設值                                                                    | 說明                                                               |
+| :------------------- | :------------------ | :------------------------------------------------------------------------ | :----------------------------------------------------------------- |
+| `ground_layer`       | `TileMapLayer`      | `null`                                                                    | 地面層（自動探測或手動綁定）                                       |
+| `obstacle_layer`     | `TileMapLayer`      | `null`                                                                    | 障礙層（自動探測或手動綁定）                                       |
+| `allow_diagonals`    | `bool`              | `false`                                                                   | 是否允許斜向移動（預設關閉，僅 4 向走格避免穿牆）                  |
+| `weight_strategy`    | `WeightStrategy`    | `ROAD_PREFERRED`                                                          | 尋路加權策略：`ROAD_PREFERRED` (優先走道路) 或 `AVOID_GRASS` (避開草地) |
+| `road_weight`        | `float`             | `1.0`                                                                     | 道路/非草地通行代價權重（數值越低越優先通行）                      |
+| `offroad_weight`     | `float`             | `3.0`                                                                     | 草地/非道路通行代價權重，使 A\* 尋路大幅偏好走在道路網格           |
+| `road_atlas_coords`  | `Array[Vector2i]`   | 主道路 `(7, 5)`、石板路 `(1, 54)`、木棧道 `(4, 39)`、廣場九宮格等           | 識別為道路/鋪設地磚之圖塊 Atlas 座標清單（白名單模式使用）         |
+| `grass_atlas_coords` | `Array[Vector2i]`   | 一般草地 `(1, 4)`、帶花草地 `(5, 0), (5, 1), (5, 2), (6, 2)`              | 識別為草地之圖塊 Atlas 座標清單（黑名單模式使用）                 |
+
+### 2.3 核心方法 (Core & Public Methods)
 
 #### `initialize_grid() -> void`
 
 - **說明**：手動或自動重新掃描 `ground_layer` 與 `obstacle_layer`，重建 `AStarGrid2D` 尋路網格。
+- **雙模式加權機制**：
+  - `ROAD_PREFERRED` (預設白名單)：在 `road_atlas_coords` 中的地塊給予 `road_weight` (1.0)，其餘地塊給予 `offroad_weight` (3.0)。
+  - `AVOID_GRASS` (黑名單)：在 `grass_atlas_coords` 中的地塊給予 `offroad_weight` (3.0)，其餘所有地塊給予 `road_weight` (1.0)，地圖擴充性最高。
 - **自訂屬性支援**：
-  - `is_solid` (bool)：設為 `true` 則該地塊不可通行。
-  - `walk_weight` (float)：設定通行代價權重。
+  - `is_solid` (bool)：若 TileData 包含此屬性且為 `true` 則該地塊不可通行。
+  - `walk_weight` (float)：若 TileData 包含此自訂數值，覆寫該格專屬權重。
+
+#### `is_road_cell(cell: Vector2i) -> bool`
+
+- **說明**：檢查指定網格座標是否屬於道路或鋪設地磚。
+
+#### `get_cell_weight(cell: Vector2i) -> float`
+
+- **說明**：取得指定網格座標的 A\* 尋路通行權重。
+
+#### `set_cell_weight(cell: Vector2i, weight: float) -> void`
+
+- **說明**：動態自訂指定網格座標的尋路通行權重。
 
 #### `get_id_path(from_cell: Vector2i, to_cell: Vector2i) -> Array[Vector2i]`
 
@@ -304,12 +369,14 @@ enum LocationType {
     - `TimeProgressBar`：當日時間進度條（`0.0 ~ 1.0`）。
   - **中央狀態 (CenterBox)**：
     - `NavStatusLabel`：A\* 導航路網狀態與可用格數。
-    - `NpcStatusLabel`：當前焦點 NPC（如 NPC_1）之即時動作或尋路狀態。
+    - `NpcStatusLabel`：當前選中焦點 NPC 或全鎮居民存活統計（如「👥 鎮民: 18 存活 (💀 2 亡故)」）。
   - **右側操作按鈕 (RightBox)**：
     - `PauseButton`：切換暫停 / 繼續（同步觸發 `Global.toggle_time_paused()`）。
-    - `Speed1xButton`, `Speed2xButton`, `Speed4xButton`：切換時間倍率（`1.0x`, `2.0x`, `4.0x`），當前倍速會發光高亮標示。
+    - `Speed1xButton`, `Speed2xButton`, `Speed4xButton`：切換時間倍率（`1.0x`, `2.0x`, `4.0x`, `8x`, `16x`, `32x`, `60x`），當前倍速會發光高亮標示。
     - `FFHourButton` (`+1h`)：快速推進 1 小時 (60 Ticks)。
     - `FFMidnightButton` (`🌙午夜`)：快速推進至下一個午夜，觸發 C# 記憶演化。
+    - `SaveButton` (`💾 存檔`)：即時將全域進度與 20 隻 NPC 存檔至 JSON（快捷鍵：`F5` 或 `Ctrl+S`）。
+    - `LoadButton` (`📂 讀檔`)：即時讀取存檔並還原所有角色位置與代謝數值（快捷鍵：`F9` 或 `Ctrl+L`）。
 
 ### 3.2 公開方法與回呼
 
@@ -321,29 +388,36 @@ enum LocationType {
 
 - **說明**：設定中央顯示的 NPC 當前行為或狀態文字（如「尋路前往餐廳」、「待機中」）。
 
+#### `show_toast(msg: String, text_color: Color = Color(0.4, 0.9, 0.5)) -> void`
+
+- **說明**：在 HUD 頂部中央彈出半透明提示橫幅（例如「💾 遊戲進度已成功儲存！(F5)」或「💀 鎮民 NPC_1 因 飢餓衰竭 亡故！」），停留 2.2 秒後平滑淡出。
+
 ---
 
 ## 4. 遊戲攝影機：GameCamera (`scene/camera/game_camera.tscn`, `scripts/camera/game_camera.gd`)
 
-繼承自 `Camera2D` 的獨立模組化相機節點，支援滑鼠中鍵即時拖曳平移、滾輪縮放、平滑導航追蹤與地圖邊界限制。
+繼承自 `Camera2D` 的獨立模組化相機節點，支援方向鍵 (及 WASD) 鍵盤平移、滑鼠中鍵即時拖曳平移、滾輪與 Z/X 鍵縮放、平滑導航追蹤與地圖邊界限制。
 
 ### 4.1 職責與特性
 
 - **獨立封裝**：相機邏輯完全內聚於 `GameCamera`，不需依賴外部腳本驅動即可自主運作。
+- **鍵盤方向鍵平移**：支援方向鍵（`UP` / `DOWN` / `LEFT` / `RIGHT` 及 `W` / `A` / `S` / `D`）長按連續平移視角，並自動依當前縮放比例換算等比移動速度。輸入框焦點時自動避讓。
 - **無縫拖曳**：在滑鼠中鍵按住拖曳時自動關閉 `position_smoothing_enabled`，確保 1:1 像素跟手感；放開時自動平滑回彈。
-- **滾輪縮放**：支援平滑 Tween 縮放，具備最小/最大邊界限制防穿幫。
+- **靈活縮放 (滾輪與 Z/X 鍵)**：支援滑鼠滾輪滾動與鍵盤 `Z`（放大）、`X`（縮小）鍵（單擊單步、長按平滑連續縮放），具備最小/最大邊界限制防穿幫。
 - **自動邊界綁定**：於 `_ready` 時自動向 `Global.get_navigation_manager()` 取得地圖大小與 Tile 像素，鎖定 `limit_left` / `limit_top` / `limit_right` / `limit_bottom`，防止相機移出地圖黑邊。
 
 ### 4.2 匯出參數 (Exports)
 
-| 屬性名稱               | 型別    | 預設值 | 說明                                         |
-| :--------------------- | :------ | :----- | :------------------------------------------- |
-| `enable_pan`           | `bool`  | `true` | 是否啟用滑鼠中鍵拖曳平移                     |
-| `enable_zoom`          | `bool`  | `true` | 是否啟用滑鼠滾輪縮放                         |
-| `min_zoom`             | `float` | `0.5`  | 最小縮放倍率（廣角視野極限）                 |
-| `max_zoom`             | `float` | `4.0`  | 最大縮放倍率（特寫視野極限）                 |
-| `zoom_factor`          | `float` | `1.15` | 單次滾輪滾動縮放倍率變化量                   |
-| `auto_bind_map_limits` | `bool`  | `true` | 是否自動取得導航地圖邊界並鎖定鏡頭可移動區域 |
+| 屬性名稱               | 型別    | 預設值  | 說明                                         |
+| :--------------------- | :------ | :------ | :------------------------------------------- |
+| `enable_pan`           | `bool`  | `true`  | 是否啟用滑鼠中鍵拖曳平移                     |
+| `enable_zoom`          | `bool`  | `true`  | 是否啟用縮放功能（滑鼠滾輪與 Z/X 鍵）        |
+| `enable_keyboard_pan`  | `bool`  | `true`  | 是否啟用鍵盤方向鍵視角平移                   |
+| `keyboard_pan_speed`   | `float` | `500.0` | 鍵盤平移移動速度（像素/秒）                  |
+| `min_zoom`             | `float` | `0.5`   | 最小縮放倍率（廣角視野極限）                 |
+| `max_zoom`             | `float` | `4.0`   | 最大縮放倍率（特寫視野極限）                 |
+| `zoom_factor`          | `float` | `1.15`  | 單次滾輪滾動或按鍵縮放倍率變化量             |
+| `auto_bind_map_limits` | `bool`  | `true`  | 是否自動取得導航地圖邊界並鎖定鏡頭可移動區域 |
 
 ### 4.3 訊號 (Signals)
 
@@ -362,7 +436,7 @@ enum LocationType {
 #### `follow(target: Node2D) -> void`
 
 - **說明**：設定相機在每一影格持續跟隨目標節點的世界位置（例如跟隨特定 NPC 行動）。
-- **特性**：若使用者按下中鍵拖曳，跟隨狀態將自動中斷並轉由手動控制。
+- **特性**：若使用者按下中鍵拖曳或使用方向鍵平移，跟隨狀態將自動中斷並轉由手動控制。
 
 #### `stop_following() -> void`
 
@@ -371,6 +445,14 @@ enum LocationType {
 #### `zoom_by_factor(factor: float) -> void`
 
 - **說明**：依倍率（如 `1.15` 或 `1.0 / 1.15`）平滑縮放相機，數值自動鉗制在 `[min_zoom, max_zoom]` 之間。
+
+#### `zoom_in() -> void`
+
+- **說明**：依預設 `zoom_factor` 平滑放大相機視野（等同於鍵盤 Z 鍵或滾輪向上滾動）。
+
+#### `zoom_out() -> void`
+
+- **說明**：依預設 `zoom_factor` 平滑縮小相機視野（等同於鍵盤 X 鍵或滾輪向下滾動）。
 
 #### `set_camera_limits(rect: Rect2i, tile_size: Vector2i = Vector2i(16, 16)) -> void`
 
@@ -403,7 +485,7 @@ enum LocationType {
 - `1`: 閱讀 (READ) -> 圖書館 (POI 19)
 - `2`: 購物 (SHOP) -> 餐廳 (POI 13) / 商店 (POI 12)
 - `3`: 吃東西 (EAT) -> 身上有食物/便當時原地吃 (POI 0)，否則前往餐廳 (POI 13)
-- `4`: 就醫 (MEDICAL) -> 醫院 (POI 18)
+- `4`: 就醫 (MEDICAL) -> 醫院 (POI 18，提供醫療急救與營養點滴，回補健康、生命、體力與飽食度 +25)
 - `5`: 回家休息 (REST) -> 自宅 (POI 1~11)
 - `6`: 社交 (SOCIAL) -> 社交廣場 (POI 20)
 - `7`: 巡田水 (PATROL) -> 農田 (POI 16)
@@ -415,7 +497,7 @@ enum LocationType {
 - 2 圖書管理員：09:00 ~ 20:00 (POI 19 圖書館)
 - 3 漁夫：07:00 ~ 09:00 (POI 17 釣魚場)
 - 4 餐廳員工：午班 11:00 ~ 13:00、晚班 18:00 ~ 21:00 (POI 13 餐廳)
-- 5 醫護人員：07:00 ~ 22:00 (POI 18 醫院)
+- 5 醫護人員：醫院 (POI 18)，採雙人輪班制 (早班 07:00 ~ 15:00 / 晚班 14:00 ~ 22:00，交接重疊 1 小時)。工作期間享有醫院茶水間補給（飽食度 +15、健康 +5，且免扣除勞動飽食消耗），避免因長時間執勤飢餓。
 - 6 伐木工：09:00 ~ 17:00 (POI 14 伐木場)
 - 7 農民：07:00 ~ 12:00 (POI 16 農田)
 - 8 商店店長：08:00 ~ 20:00 (POI 12 商店)
@@ -442,7 +524,8 @@ enum LocationType {
       job_id: int,
       food_count: int,
       lunchbox_count: int,
-      personality_offset: PackedFloat32Array = PackedFloat32Array()
+      personality_offset: PackedFloat32Array = PackedFloat32Array(),
+      npc_id: String = ""
   ) -> Dictionary
   ```
 - **回傳字典格式**：
@@ -557,7 +640,7 @@ enum LocationType {
 
 #### `tick_update(delta_ticks: int = 1, is_sleeping: bool = false, is_working: bool = false) -> void`
 
-- **說明**：依據推進的 Tick 數，計算飽食度下降、體力升降（睡眠回血、工作耗體）、健康度聯動與修飾器結算。
+- **說明**：依據推進的 Tick 數，計算飽食度下降、體力升降（睡眠回血、工作耗體）、健康度聯動與修飾器結算。當飽食度降至 0 時觸發**飢荒飢餓衰竭機制**：每 Tick 健康度損失 `0.2`、生命值 (`hp`) 損失 `0.3`；當健康度過低 (`health < 20.0`) 進入生病重症狀態，每 Tick 額外扣除生命值 `0.15`，促使其前往醫院就醫；生命值歸零時發射 `hp_depleted(npc_id)` 訊號。
 
 #### `add_item(item_type: String, amount: int = 1) -> void` / `consume_item(item_type: String, amount: int = 1) -> bool`
 
@@ -574,6 +657,22 @@ enum LocationType {
 #### `modify_relationship(target_id: String, delta_friendship: float, delta_trust: float) -> void`
 
 - **說明**：變動與特定 NPC 的好感度或信任度，並發射 `relationship_changed` 訊號。
+
+#### `add_stm_event(event_text: String) -> void`
+
+- **說明**：新增單筆短期生活事件記憶 (STM)，保留最新 5 筆（例如用餐、工作、治療、與特定鄰居社交之互動結果）。
+
+#### `get_days_since_interaction(target_id: String, current_day: int) -> float`
+
+- **說明**：查詢距上次與特定 NPC 互動之遊戲天數（預設 3.0，最大 10.0），作為 7 維社交 ONNX 模型之特徵輸入。
+
+#### `record_interaction(target_id: String, current_day: int) -> void`
+
+- **說明**：記錄與特定 NPC 發生社交互動之遊戲天數。
+
+#### `evolve_midnight_memory(day: int) -> void`
+
+- **說明**：每日午夜 (00:00 / Tick 0) 觸發記憶演化結算：人際好感度網向基準值溫和收斂，沉澱當日思緒並歸檔日記。
 
 #### `add_modifier(mod: Dictionary) -> void` / `remove_modifier(mod_id: String) -> void`
 
@@ -600,6 +699,7 @@ enum State {
 - **呼叫下層、訊號上層 (Call Down, Signal Up)**：內部透過發射 `state_changed`、`target_reached`、`action_started`、`action_completed` 與外部系統通信。
 - **Tween 平滑位移**：嚴禁在 `_process` 中手動更新座標，全面使用 `Tween.TRANS_LINEAR` 逐格平滑過渡。
 - **4 方向行走與定格**：移動時依方向向量自動切換 `walk_up/down/left/right`，到達目的地時調用 `pause()` 與 `frame = 0` 保持自然定格。
+- **時間暫停與動態倍速響應 (Pause & Time Scale Reactive Sync)**：全面監聽 `Global.time_paused_toggled` 與 `Global.time_scale_changed`。暫停時即時凍結正在運行的位移 `Tween`、定格歩行動畫並暫停內部行為倒數計時器；變速時即時重設 Tween 與 Sprite 動畫播放速率 (`cur_scale`)，杜絕高倍速下按暫停反而還原為 1 倍速移動之邏輯缺陷。
 
 ### 7.2 匯出參數 (Exports)
 
@@ -654,6 +754,75 @@ enum State {
 
 - **說明**：控制頭頂對話氣泡顯示與計時隱藏。
 
+#### `is_concealed: bool`
+
+- **說明**：標記該 NPC 目前是否處於進屋/進林隱藏狀態。
+
+#### `enter_building(entrance_dir: String = "south") -> void`
+
+- **說明**：進入建築物或密林工坊，朝向 `entrance_dir` 旋轉並執行 0.35 秒平滑淡出動畫，完成後將 `visible` 設為 `false` 並標記 `is_concealed = true`。
+
+#### `exit_building() -> void`
+
+- **說明**：自建築物或密林現身，將 `visible` 設為 `true` 並執行 0.35 秒平滑淡入動畫，重設 `is_concealed = false`。
+
+#### `is_dead: bool` / `death_cause: String`
+
+- **說明**：標記該 NPC 是否已死亡以及其死亡原因（如 `"飢餓衰竭"`、`"體力耗盡"`）。死亡後將停止計時與神經網路決策，狀態轉為長眠。
+
+#### `is_social_target: bool`
+
+- **說明**：標記該 NPC 當前是否已被另一位居民選為社交對象。社交發起者會將其鎖定，防止全鎮多人同時朝向同一名 NPC 移動造成同格聚集。
+
+#### `die(cause: String = "飢餓衰竭") -> void`
+
+- **說明**：手動或因生命值歸零觸發死亡。中斷當前行為、停止 Tween 位移、停止氣泡並觸發倒地展演（旋轉 90 度躺平、畫面調暗變灰 `Color(0.45, 0.45, 0.5)`），並向全域發射 `Global.on_npc_died` 死亡廣播。
+
+#### `to_dict() -> Dictionary` / `from_dict(data: Dictionary) -> void`
+
+- **說明**：將 NPC 當前世界座標、網格座標、狀態機、面向、隱蔽標記、死亡標記及所屬 `NPCData` 序列化/反序列化，供存讀檔系統還原。
+
+#### `get_state_name() -> String`
+
+- **說明**：取得當前狀態之中文易讀名稱。動態結合 `current_state` 與 `current_action_id` 進行解析：
+  - `State.IDLE` -> `"待機"`
+  - `State.MOVING` -> `"移動中"`
+  - `State.INTERACTING` -> 依據行為細分：`2` 購物為 `"購物中"`、`3` 吃飯為 `"用餐中"`、其他為 `"社交中"`。
+  - `State.WORKING` -> `"工作中"`
+  - `State.RESTING` -> `"休息中"`
+  - 死亡時回傳 `"💀 亡故"`。
+
+#### 社交防空轉、防幽靈對話與雙向握手機制
+
+- **搜尋半徑限制 (`MAX_SOCIAL_SEARCH_DIST = 160.0px`)**：僅在周遭約 10 格範圍內尋找閒置 (`State.IDLE`) 的對象，不再跨越整座城鎮發起社交。
+- **移動與狀態明確分離**：在前往對方身旁或前往廣場過程中，狀態維持為 `State.MOVING`，UI 顯示為「前往社交」，絕不提前切換至「社交中」。
+- **抵達距離二次確認 (`SOCIAL_INTERACT_DIST = 38.0px`)**：發起者到達目標鄰近格時，再次檢測雙方距離。若對方已走遠或因突發需求離開，立即安全釋放鎖定並轉為普通待機，絕不對著空氣自言自語或強行將遠方的對方改為社交中。
+- **面對面同步互動 (`_start_mutual_conversation`)**：雙方確實處於相鄰位置時，同步中止殘留位移、互相面對、同時進入 `State.INTERACTING`、頭頂冒出對話氣泡並提升好感度，結束後雙方安全同步解鎖。
+- **廣場無人保護**：若周遭無人而前往社交廣場，抵達後若依然無人，維持 `State.IDLE` 散步待機，不觸發孤立的社交狀態。
+- **相鄰獨立站位 (`_get_free_adjacent_cell`)**：尋找對方上下左右 4 格且**未被其他 NPC 佔用**之可行走地塊站立，徹底杜絕兩人疊在同一個地塊。
+- **廣域設施目標分散**：前往社交廣場 (POI 20) 或農田等開放性廣域 POI 時，從 POI 的 `walkable_cells` 中隨機選取未被佔用的格子分散站位。
+
+### 7.5 行為反饋與生理代謝模擬閉環 (Action Metabolic & Economic Feedback Loop)
+
+為確保 NPC 15 維度神經模型與生理代謝之自然閉環運轉，各項行為在抵達目標地點與執行期間均具備嚴格的數值增減與經濟代價回饋：
+
+| 行為代碼與名稱 | 觸發地點 (POI) | 經濟收支與物資變動 (對齊 Google 道具表) | 生理與心理屬性變更 | 設計機制與防呆說明 |
+| :--- | :--- | :--- | :--- | :--- |
+| **0: 閒逛 (Wander)** | POI 20 (廣場) 或 原地鄰格 | 無 | 心情 `+5 ~ +6`<br>體力 `-2.0` | 散步放鬆心情，微量消耗體力。較容易前往社交廣場 (POI 20)。 |
+| **1: 閱讀 (Read)** | POI 19 (圖書館) | 無 | 心情 `+20.0`<br>體力 `-5.0` | 閱讀充實精神境界，高度改善心情。 |
+| **2: 購物 (Shop)** | POI 13 (餐廳) 或 POI 12 (商店) | 金錢 `-3` 購買便當或料理 | 心情 `+10.0` | 預先購買存糧（道具表售價 $3），儲備後續原地進食之資源。 |
+| **3: 吃東西 (Eat)** | POI 13 (餐廳) 或 POI 0 (原地) | 餐廳：金錢 `-3`<br>原地：消耗便當或料理 | 餐廳：飽食 `+60`、體力 `+25`、心情 `+20`<br>原地：飽食 `+35~45`、體力 `+10~15`、心情 `+5~10` | **救濟愛心熱湯防呆**：若 NPC 無錢亦無糧，餐廳提供愛心熱湯 (飽食 `+40`、體力 `+15`、心情 `+10`)，杜絕餓死在餐廳門口。<br>**原地自救防呆**：原地若無便當，依序食用生鮮作物/魚或野果。 |
+| **4: 就醫 (Medical)** | POI 18 (醫院) | 金錢 `-5` (掛號醫療費) | 健康 `+45.0`<br>生命 `+35.0`<br>體力 `+20.0`<br>心情 `+15.0` | 全面治療傷病與虛弱狀態，恢復生理指標。 |
+| **5: 回家休息 (Rest)** | POI 1~11 / 21 (自宅) | 無 | 體力 `+35.0`<br>心情 `+15.0`<br>生命 `+15.0` (健康良好時) | 居家安歇，快速恢復體力與精神。 |
+| **6: 社交 (Social)** | POI 20 (廣場) 或 夥伴身旁 | 無 | 社交慾望 `+40.0`<br>心情 `+15.0`<br>好感/信任 `+3/+2` | 雙向同步補足社交慾望缺口，加深鄰里情誼。 |
+| **7: 巡田水 (Patrol)** | POI 16 (農田) | 農作物 `+1` | 體力 `-8.0`<br>飽食 `-4.0`<br>心情 `+6.0` | 農夫特有巡視田埂並採收作物。 |
+| **8: 販售物品 (Sell)** | POI 12 (商店/市場) | 出售庫存變現 (依道具表定價)：<br>作物 `+$5`、礦石 `+$2`、魚 `+$2`、木頭 `+$2`、石頭 `+$1` | 心情 `+15.0` | 將生產勞動所得變現為流動資金。若無物可賣則打零工領取基礎津貼 `+$1`。 |
+| **崗位執勤 (Work)** | 職業專屬 POI 12~19 | 依各職業產出資源或領取工資 | 體力 `-10.0`<br>飽食 `-5.0` | 勞動消耗能量，自然驅動 NPC 於午餐時間用餐與夜間就寢。 |
+
+- **工作排程判定修正 (`is_work_schedule`)**：
+  - 決策大腦嚴格將「工作排程 (`is_work_schedule`)」與一般規則覆蓋（如午餐時間、就寢時間）分離。
+  - 確保 NPC 在 12:00 午餐時間前往餐廳時，專注於「進食與恢復飽食度」，不再被誤判為執勤工作。
+
 ---
 
 ## 8. NPC 生成工廠：NPCSpawner (`scripts/entities/npc_spawner.gd`)
@@ -671,7 +840,7 @@ enum State {
 
 | 屬性名稱              | 型別             | 預設值 | 說明                                                                   |
 | :-------------------- | :--------------- | :----- | :--------------------------------------------------------------------- |
-| `spawn_count`         | `int` (`1 ~ 20`) | `3`    | 遊戲啟動時生成之 NPC 數量（預設 3 隻供初步觀察，可調至 20 隻全鎮運轉） |
+| `spawn_count`         | `int` (`1 ~ 20`) | `20`   | 遊戲啟動時生成之 NPC 數量（預設為全鎮 20 隻完整運轉）                 |
 | `auto_spawn_on_ready` | `bool`           | `true` | 是否在進入場景樹 `_ready` 時自動執行 POI 註冊與 NPC 批量生成           |
 
 ### 8.3 公開與核心方法 (Public & Core Methods)
@@ -713,13 +882,17 @@ enum State {
 ### 9.1 核心特性
 
 - **角色側邊平滑跟隨 (Side-by-Side Tracking)**：透過 `get_global_transform_with_canvas().origin` 將 NPC 世界座標轉換為螢幕像素座標，預設浮動於角色「右側」（若靠右邊緣則自動翻轉至「左側」），完全不遮擋角色本體與行走動畫，可同時清楚觀看角色肢體演出與 HUD 數據。
-- **橫向精巧雙欄版面 (Compact Two-Column)**：尺寸控制在 380x210 像素，左欄顯示 AI 大腦決策（目標 POI、規則覆蓋或神經推論、前 2 高評分條），右欄顯示 15 維度生理進度條與背包庫存，拒絕冗長垂直拉伸。
+- **雙分頁頁籤卡片架構 (Dual-Tab Card Layout)**：面板尺寸設定為 410x250 像素，採用 `TabContainer` 分流呈現複雜數據，視覺乾淨俐落：
+  - **分頁 1：📊 生理與決策 (Physiology & Decision Tab)**：
+    - **生理數值與庫存 (左欄)**：即時彩色雙欄進度條呈現生命、健康、體力、飽食度、社交慾望、心情（0~100 帶百分比與數值顏色警告），以及持幣量與背包 7 類物品持有數量。
+    - **日常決策神經網絡 (右欄)**：顯示推論引擎狀態標籤（C# ONNX Runtime 或 GDScript Fallback）、當前行為意圖與目標 POI、決策模式（規則覆蓋原因或神經自主決策），以及 15 維度神經模型輸出評分最高的 Top 2 機率柱狀進度條。
+  - **分頁 2：🧠 社交與記憶 (Social & Memory Tab)**：
+    - **社交神經模型推論觀測區 (Social ONNX Inference Radar)**：顯示社交決策引擎加載狀態（`[ONNX 就緒]` 或 `[Fallback]`）、當前鎖定之社交候選 NPC 名稱、神經網路意向指數（%）、以及選定之 7 種社交行為（普通聊天、討論主題、共同活動等）；若未在社交則顯示周遭掃描雷達狀態。
+    - **心靈記憶系統觀測區 (Soul Memory System)**：
+      - **長期記憶特質 (LTM Traits)**：顯示該 NPC 深層性格標籤（例如 `[友善]`、`[勤奮]`、`[謹慎]`）。
+      - **中長期人際網絡 (MTM Network)**：排序顯示與全鎮居民的好感度 (`Friendship`) 與信任度 (`Trust`) 最高之前 2 名對象與數值。
+      - **短期生活記憶滾動誌 (STM Events)**：即時記錄最新 3 筆日常微觀生活事件（例如用餐、就醫、採集、工作、與鄰居聊天等真實歷程）。
 - **純代碼生成 (Pure Code Driven)**：UI 節點均以純 GDScript 動態構建，完全不需要建立或維護 `.tscn` 場景。
-- **即時數據動態展示**：
-  - **身份與狀態**：NPC 姓名、職業、FSM 狀態機標籤（彩色高亮）、地圖座標與所屬網格 Cell。
-  - **AI 大腦與決策**：當前行為與目標 POI、推論引擎（C# ONNX Runtime 或 GDScript MLP）、決策機制（規則覆蓋原因或神經自主決策）、神經輸出評分 Top 3（數值與微型進度條）。
-  - **15 維度生理狀態**：生命、健康、體力、飽食度、社交慾望、心情（雙欄即時彩色進度條）。
-  - **經濟與庫存**：金錢餘額、攜帶物品（木/石/礦/作物/魚/料理/便當）。
 - **鏡頭聚焦連動**：提供「鏡頭鎖定/平移」按鈕，點擊後自動平滑平移至選中的 NPC。
 - **操作防呆**：支援點擊其他 NPC 無縫切換、點擊右上角 `[✕]` 或按鍵盤 `ESC` 鍵立即關閉。
 

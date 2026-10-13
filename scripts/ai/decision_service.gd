@@ -45,7 +45,7 @@ const JOB_SCHEDULES: Dictionary = {
 		"shifts": [ {"start": 660, "end": 780}, {"start": 1080, "end": 1260}],
 		"poi": 13
 	},
-	5: {"name": "醫護人員", "work_start": 420, "work_end": 1320, "poi": 18}, # 07:00 ~ 22:00 醫院
+	5: {"name": "醫護人員", "shifts_desc": "早班07:00~15:00 / 晚班14:00~22:00", "poi": 18}, # 07:00 ~ 22:00 醫院 (輪班制)
 	6: {"name": "伐木工", "work_start": 540, "work_end": 1020, "poi": 14}, # 09:00 ~ 17:00 伐木場
 	7: {"name": "農民", "work_start": 420, "work_end": 720, "poi": 16}, # 07:00 ~ 12:00 農田
 	8: {"name": "商店店長", "work_start": 480, "work_end": 1200, "poi": 12}, # 08:00 ~ 20:00 商店
@@ -252,7 +252,8 @@ func evaluate_decision(
 	job_id: int,
 	food_count: int,
 	lunchbox_count: int,
-	personality_offset: PackedFloat32Array = PackedFloat32Array()
+	personality_offset: PackedFloat32Array = PackedFloat32Array(),
+	npc_id: String = ""
 ) -> Dictionary:
 	# 規則 1：就寢時間 (23:00 ~ 06:00 / tick >= 1380 或 tick < 360) 強制回家睡覺
 	if current_tick >= BEDTIME_TICK or current_tick < WAKE_UP_TICK:
@@ -279,7 +280,7 @@ func evaluate_decision(
 		}
 
 	# 規則 3：上班時間檢查
-	var work_check: Dictionary = _check_job_work_time(current_tick, job_id, stats)
+	var work_check: Dictionary = _check_job_work_time(current_tick, job_id, stats, home_id, npc_id)
 	if work_check.get("is_working", false):
 		var act_id: int = int(work_check.get("action", 7))
 		var job_name: String = String(work_check.get("job_name", "工作"))
@@ -289,6 +290,7 @@ func evaluate_decision(
 			"target_location": work_check.get("poi", 0),
 			"scores": PackedFloat32Array(),
 			"is_rule_override": true,
+			"is_work_schedule": true,
 			"override_reason": "工作時間，前往 %s 崗位執勤" % job_name
 		}
 
@@ -316,7 +318,7 @@ func get_location_by_action(
 	food_count: int,
 	lunchbox_count: int,
 	home_id: int,
-	job_id: int
+	_job_id: int
 ) -> int:
 	match action_index:
 		0: # 閒逛
@@ -387,7 +389,7 @@ func is_available_for_social(current_action: int, is_at_home: bool = false) -> b
 # 8. 內部輔助：工作時間判定
 # ------------------------------------------------------------------------------
 
-func _check_job_work_time(tick: int, job_id: int, stats: PackedFloat32Array) -> Dictionary:
+func _check_job_work_time(tick: int, job_id: int, stats: PackedFloat32Array, home_id: int = 0, npc_id: String = "") -> Dictionary:
 	# 若體力過低 (< 15) 或健康度過低 (< 15)，身體不適不強制上班
 	var stamina: float = stats[2] if stats.size() > 2 else 50.0
 	var health: float = stats[1] if stats.size() > 1 else 50.0
@@ -399,6 +401,21 @@ func _check_job_work_time(tick: int, job_id: int, stats: PackedFloat32Array) -> 
 
 	var job_info: Dictionary = JOB_SCHEDULES[job_id]
 	var poi: int = job_info.get("poi", 0)
+
+	# 醫護人員專用輪班制 (早班 07:00~15:00 Ticks 420~900 / 晚班 14:00~22:00 Ticks 840~1320)
+	if job_id == 5:
+		var is_late_shift: bool = (npc_id == "npc_10" or home_id == 9)
+		var s_start: int = 840 if is_late_shift else 420
+		var s_end: int = 1320 if is_late_shift else 900
+		var shift_name: String = "晚班" if is_late_shift else "早班"
+		if tick >= s_start and tick < s_end:
+			return {
+				"is_working": true,
+				"poi": poi,
+				"action": 7,
+				"job_name": "醫護人員 (%s)" % shift_name
+			}
+		return {"is_working": false}
 
 	# 雙班制 (如餐廳員工)
 	if job_info.has("shifts"):

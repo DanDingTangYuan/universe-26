@@ -19,8 +19,8 @@ const POIS_PATH: String = "res://data/poi_locations.json"
 # 1. 匯出參數 (Exports)
 # ------------------------------------------------------------------------------
 
-## 遊戲啟動時生成之 NPC 數量 (預設 3 隻供第一步除錯驗證，可調整至 20 隻)
-@export_range(1, 20) var spawn_count: int = 3
+## 遊戲啟動時生成之 NPC 數量 (預設為全部 20 隻)
+@export_range(1, 20) var spawn_count: int = 20
 
 ## 是否在 _ready 時自動執行生成
 @export var auto_spawn_on_ready: bool = true
@@ -134,8 +134,8 @@ func load_and_register_pois(path: String = POIS_PATH) -> bool:
 			var id: int = int(poi.get("id", -1))
 			var cell_arr: Array = poi.get("cell", [-1, -1])
 			if cell_arr.size() >= 2 and id >= 0:
-				global_node.register_poi(id, Vector2i(int(cell_arr[0]), int(cell_arr[1])))
-		print("[NPCSpawner] 成功註冊 %d 個 POI 設施座標！" % poi_list.size())
+				global_node.register_poi(id, Vector2i(int(cell_arr[0]), int(cell_arr[1])), poi)
+		print("[NPCSpawner] 成功註冊 %d 個 POI 設施座標與詳細配置！" % poi_list.size())
 		return true
 	return false
 
