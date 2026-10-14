@@ -20,6 +20,13 @@ config/icon="res://icon.svg"
 
 Global="*uid://bbeokvugn6uml"
 
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [dotnet]
 
 project/assembly_name="Universe 26"
@@ -31,12 +38,3 @@ project/assembly_name="Universe 26"
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-
-[display]
-
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/size/resizable=true
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/dpi/allow_hidpi=true

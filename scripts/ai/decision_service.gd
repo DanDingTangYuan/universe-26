@@ -253,7 +253,8 @@ func evaluate_decision(
 	food_count: int,
 	lunchbox_count: int,
 	personality_offset: PackedFloat32Array = PackedFloat32Array(),
-	npc_id: String = ""
+	npc_id: String = "",
+	action_weights: Array = []
 ) -> Dictionary:
 	# 規則 1：就寢時間 (23:00 ~ 06:00 / tick >= 1380 或 tick < 360) 強制回家睡覺
 	if current_tick >= BEDTIME_TICK or current_tick < WAKE_UP_TICK:
@@ -294,14 +295,26 @@ func evaluate_decision(
 			"override_reason": "工作時間，前往 %s 崗位執勤" % job_name
 		}
 
-	# 規則 4：無排程干預時，由神經網路 (AI) 自由決策
+	# 規則 4：無排程干預時，由神經網路 (AI) 自由決策 (依據圖 3: 依 LTM 權重改變分數並輪盤抽樣)
 	var scores: PackedFloat32Array = forward(stats, personality_offset)
-	var best_action: int = get_best_action_index(scores)
-	var target_location: int = get_location_by_action(best_action, food_count, lunchbox_count, home_id, job_id)
+	var chosen_action: int = 0
+	if not action_weights.is_empty() and action_weights.size() >= 9:
+		var weights_array: PackedFloat32Array = PackedFloat32Array()
+		weights_array.resize(9)
+		for i in range(9):
+			weights_array[i] = float(action_weights[i])
+		if _use_csharp_onnx and _csharp_bridge != null and _csharp_bridge.has_method("SampleActionWithWeights"):
+			chosen_action = int(_csharp_bridge.SampleActionWithWeights(scores, weights_array))
+		else:
+			chosen_action = _sample_action_with_weights(scores, weights_array)
+	else:
+		chosen_action = get_best_action_index(scores)
+
+	var target_location: int = get_location_by_action(chosen_action, food_count, lunchbox_count, home_id, job_id)
 
 	return {
-		"best_action": best_action,
-		"best_action_name": get_action_name(best_action),
+		"best_action": chosen_action,
+		"best_action_name": get_action_name(chosen_action),
 		"target_location": target_location,
 		"scores": scores,
 		"is_rule_override": false,
@@ -502,3 +515,107 @@ func get_social_action_name(action_id: int) -> String:
 	if action_id >= 0 and action_id < SOCIAL_ACTION_NAMES.size():
 		return SOCIAL_ACTION_NAMES[action_id]
 	return "未知"
+
+# ------------------------------------------------------------------------------
+# 10. 記憶資料庫與啟動載入服務 (Memory Database & Startup Service)
+# ------------------------------------------------------------------------------
+
+## 檢查 C# 橋接是否具備資料庫功能
+func is_database_available() -> bool:
+	return _csharp_bridge != null and _csharp_bridge.has_method("InitializeMemoryDatabase")
+
+## 初始化所有記憶資料庫 (對應圖 1: 初始化所有資料庫 STSM, MTSM, LTSM, STM, MTM, LTM)
+func initialize_memory_database(db_path: String = "res://NPC_Memory.db", force_reset: bool = false) -> bool:
+	if is_database_available():
+		return bool(_csharp_bridge.InitializeMemoryDatabase(db_path, force_reset))
+	return false
+
+## 檢查資料庫檔案是否存在
+func has_memory_database(db_path: String = "res://NPC_Memory.db") -> bool:
+	if is_database_available():
+		return bool(_csharp_bridge.HasMemoryDatabase(db_path))
+	return FileAccess.file_exists(db_path)
+
+## 依據圖 1 (讀取存檔)，從 MTM, LTM, LTSM 載入資料並計算歷史分數
+func load_npc_startup_data(npc_id: int, db_path: String = "res://NPC_Memory.db") -> Dictionary:
+	if is_database_available():
+		return _csharp_bridge.LoadNPCStartupData(npc_id, db_path)
+	return {}
+
+## 依據圖 1 (新開局)，將使用者設定的詞條存入 LTM
+func store_npc_entry(npc_id: int, traits_dict: Dictionary, db_path: String = "res://NPC_Memory.db") -> bool:
+	if is_database_available():
+		return bool(_csharp_bridge.StoreNPCEntry(npc_id, traits_dict, db_path))
+	return false
+
+# ------------------------------------------------------------------------------
+# 11. 圖 2、圖 4 與圖 5 執行期記憶寫入與換日結算服務
+# ------------------------------------------------------------------------------
+
+## 依據圖 2：計算一般行動數值增減並儲存至 STM
+func save_normal_action_memory(
+	npc_id: int,
+	time: int,
+	stats: Dictionary,
+	action: int,
+	location: int,
+	is_success: bool,
+	db_path: String = "res://NPC_Memory.db"
+) -> Dictionary:
+	if is_database_available() and _csharp_bridge.has_method("SaveNormalActionMemory"):
+		return _csharp_bridge.SaveNormalActionMemory(npc_id, time, stats, action, location, is_success, db_path)
+	return {}
+
+## 依據圖 4：計算社交互動數值增減並儲存雙向記憶至 STSM
+func save_social_action_memory(
+	source_id: int,
+	target_id: int,
+	time: int,
+	social_action: int,
+	source_social: Dictionary,
+	target_social: Dictionary,
+	db_path: String = "res://NPC_Memory.db"
+) -> Dictionary:
+	if is_database_available() and _csharp_bridge.has_method("SaveSocialActionMemory"):
+		return _csharp_bridge.SaveSocialActionMemory(source_id, target_id, time, social_action, source_social, target_social, db_path)
+	return {}
+
+## 依據圖 5：執行午夜換日結算前半 (步驟 1~5: SettleSTM -> SettleMTSM -> SettleSTSM)
+func execute_midnight_settlement_1(db_path: String = "res://NPC_Memory.db") -> bool:
+	if is_database_available() and _csharp_bridge.has_method("ExecuteMidnightSettlement1"):
+		return bool(_csharp_bridge.ExecuteMidnightSettlement1(db_path))
+	return false
+
+## 依據圖 5：執行午夜換日結算後半 (步驟 6~10: SaveState -> LoadHistoryEvent -> LoadActionWeights)
+func execute_midnight_settlement_2(
+	npc_id: int,
+	current_stats: Dictionary,
+	current_trust: Dictionary,
+	current_friendships: Dictionary,
+	db_path: String = "res://NPC_Memory.db"
+) -> Dictionary:
+	if is_database_available() and _csharp_bridge.has_method("ExecuteMidnightSettlement2"):
+		return _csharp_bridge.ExecuteMidnightSettlement2(npc_id, current_stats, current_trust, current_friendships, db_path)
+	return {}
+
+## 內部輔助：基於權重的輪盤抽樣 (純 GDScript 備用)
+func _sample_action_with_weights(scores: PackedFloat32Array, weights: PackedFloat32Array) -> int:
+	var total: float = 0.0
+	var weighted: PackedFloat32Array = PackedFloat32Array()
+	weighted.resize(scores.size())
+	for i in range(scores.size()):
+		var w: float = weights[i] if i < weights.size() else 1.0
+		var s: float = maxf(0.0, scores[i] * w)
+		weighted[i] = s
+		total += s
+	if total <= 0.0:
+		return get_best_action_index(scores)
+	var r: float = randf() * total
+	var cum: float = 0.0
+	for i in range(weighted.size()):
+		cum += weighted[i]
+		if r <= cum:
+			return i
+	return 0
+
+

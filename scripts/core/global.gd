@@ -180,6 +180,7 @@ func _advance_one_tick() -> void:
 		day_passed.emit(current_day)
 		on_midnight_reached.emit(current_day)
 		print("[Global] 進入新的一天: 第 %d 天，午夜記憶演化觸發！" % current_day)
+		_execute_midnight_settlement()
 	
 	tick_passed.emit(current_tick)
 	
@@ -223,6 +224,59 @@ func toggle_time_paused() -> void:
 func debug_fast_forward_ticks(ticks: int) -> void:
 	for i in range(ticks):
 		_advance_one_tick()
+
+## 執行午夜跨日記憶結算管線 (嚴格對應圖 5: 步驟 1 ~ 10)
+func _execute_midnight_settlement() -> void:
+	var service: DecisionServiceClass = get_decision_service()
+	if service == null or not service.is_database_available():
+		print("[Global] 決策服務或記憶資料庫未就緒，略過換日結算。")
+		return
+
+	print("[Global] 🌙 開始執行第 %d 天午夜換日記憶結算管線..." % current_day)
+
+	# 步驟 1 ~ 5: 結算 STM -> 清空 STM -> 結算 MTSM (重要性-1/清理) -> 結算 STSM -> 清空 STSM
+	var step1_ok: bool = service.execute_midnight_settlement_1()
+	if not step1_ok:
+		push_error("[Global] 午夜結算前半 (步驟 1~5) 失敗！")
+		return
+
+	# 步驟 6 ~ 10: 針對所有 20 隻 NPC 執行後半結算 (存入 MTM/LTSM、重算歷史分數、載入新權重回傳遊戲端)
+	var all_npcs: Array[Node2D] = get_all_npcs()
+	var settled_count: int = 0
+
+	for npc_node in all_npcs:
+		if not is_instance_valid(npc_node):
+			continue
+		var data = npc_node.get("npc_data")
+		if data == null:
+			continue
+
+		var nid_str: String = data.npc_id
+		var clean_id: String = nid_str.replace("npc_", "").replace("NPC_", "")
+		if not clean_id.is_valid_int():
+			continue
+		var npc_num: int = clean_id.to_int()
+		if npc_num < 1 or npc_num > 20:
+			continue
+
+		var stats_dict: Dictionary = data.get_physiological_dict()
+		var trust_dict: Dictionary = data.trust
+		var fav_dict: Dictionary = data.friendships
+
+		var res: Dictionary = service.execute_midnight_settlement_2(
+			npc_num,
+			stats_dict,
+			trust_dict,
+			fav_dict
+		)
+
+		if res.get("success", false):
+			var new_weights: Array = res.get("action_weights", [])
+			var new_scores: Array = res.get("history_scores", [])
+			data.apply_settlement_data(new_weights, new_scores)
+			settled_count += 1
+
+	print("[Global] ✨ 第 %d 天午夜換日記憶結算完成！共 %d 隻 NPC 行動權重與歷史好壞分數完成演化同步。" % [current_day, settled_count])
 
 # ------------------------------------------------------------------------------
 # 6. 導航管理器服務定位器 (Navigation Service Locator)

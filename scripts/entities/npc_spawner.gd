@@ -25,6 +25,9 @@ const POIS_PATH: String = "res://data/poi_locations.json"
 ## 是否在 _ready 時自動執行生成
 @export var auto_spawn_on_ready: bool = true
 
+## 是否載入現有記憶資料庫 (對應圖 1: 是否讀取存檔。若為 false 則視為新開局並重置 DB)
+@export var load_existing_memory_save: bool = true
+
 # ------------------------------------------------------------------------------
 # 2. 內部狀態 (Internal Variables)
 # ------------------------------------------------------------------------------
@@ -45,13 +48,68 @@ func _ready() -> void:
 # 4. 初始化與批量生成 (Initialization & Spawning)
 # ------------------------------------------------------------------------------
 
-## 初始化導航、POI 並依據設定生成指定數量之 NPC
+## 初始化導航、POI 並依據圖 1 流程執行啟動載入或新開局初始化
 func initialize_and_spawn() -> void:
 	_ensure_navigation_manager()
 	_ensure_npc_inspector()
 	load_and_register_pois()
 	load_templates()
+
+	var global_node: Node = _get_global()
+	var decision_service = global_node.get_decision_service() if global_node and global_node.has_method("get_decision_service") else null
+
+	# ============================================================
+	# 圖 1: 遊戲啟動時判斷分支 (是否讀取存檔)
+	# ============================================================
+	var has_db: bool = false
+	if decision_service and decision_service.has_method("has_memory_database"):
+		has_db = decision_service.has_memory_database("res://NPC_Memory.db")
+
+	var is_loading_save: bool = load_existing_memory_save and has_db
+
+	if not is_loading_save:
+		# ------------------------------------------------------------
+		# 圖 1 分支 [否]: 
+		# 1. 初始化所有資料庫 (STSM, MTSM, LTSM, STM, MTM, LTM)
+		# ------------------------------------------------------------
+		if decision_service and decision_service.has_method("initialize_memory_database"):
+			decision_service.initialize_memory_database("res://NPC_Memory.db", true)
+			print("[NPCSpawner] 【圖1-新遊戲】成功初始化 6 大記憶資料庫 (NPC_Memory.db)！")
+
+	# 生成所有 NPC 實體
 	spawn_all()
+
+	# 針對生成的每一位 NPC 執行圖 1 對應的資料處理
+	for npc in _spawned_npcs:
+		if npc and npc is NPCControllerClass:
+			var ctrl: NPCController = npc as NPCController
+			var data: NPCData = ctrl.npc_data as NPCData
+			if data:
+				var num_id: int = _extract_npc_number(data.npc_id)
+				if is_loading_save:
+					# --------------------------------------------------------
+					# 圖 1 分支 [是]:
+					# 1. 從 MTM 載入現有 NPC 數值
+					# 2. 從 LTM 載入行動權重及詞條
+					# 3. 從 LTSM 載入 NPC 之間的信任度及好感度
+					# 4. 計算 NPC 對彼此的互動歷史分數
+					# --------------------------------------------------------
+					if decision_service and decision_service.has_method("load_npc_startup_data"):
+						var startup_dict: Dictionary = decision_service.load_npc_startup_data(num_id, "res://NPC_Memory.db")
+						if startup_dict.get("success", false):
+							data.apply_startup_data(startup_dict)
+							print("[NPCSpawner] 【圖1-讀取存檔】NPC %s 已自 MTM/LTM/LTSM 完整還原！" % data.npc_id)
+				else:
+					# --------------------------------------------------------
+					# 圖 1 分支 [否]:
+					# 2. 使用者設定 NPC 詞條 (套用模板初始配置)
+					# 3. 將詞條存入 LTM
+					# --------------------------------------------------------
+					if decision_service and decision_service.has_method("store_npc_entry"):
+						decision_service.store_npc_entry(num_id, data.ltm_entries, "res://NPC_Memory.db")
+						print("[NPCSpawner] 【圖1-新遊戲】NPC %s 詞條已存入 LTM 資料庫！" % data.npc_id)
+
+	print("[NPCSpawner] 【圖1-結束】啟動載入流程完成，開始模擬！")
 
 ## 確保場景中擁有 NPCInspector 觀測視窗
 func _ensure_npc_inspector() -> void:
@@ -225,6 +283,13 @@ func spawn_npc(template: Dictionary) -> CharacterBody2D:
 	data.food = int(init_stats.get("food", 0))
 	data.lunchbox = int(init_stats.get("lunchbox", 0))
 
+	# 載入 LTM 詞條配置 (若模板中有自訂設定)
+	var template_entries: Dictionary = template.get("entries", {})
+	if not template_entries.is_empty():
+		for k in template_entries.keys():
+			data.ltm_entries[k] = bool(template_entries[k])
+		data.calculate_personality_offset_from_entries()
+
 	# 綁定至控制器
 	npc.npc_data = data
 
@@ -292,3 +357,11 @@ func _get_nav_manager():
 	if g and g.has_method("get_navigation_manager"):
 		return g.get_navigation_manager()
 	return null
+
+## 從字串 ID (如 "npc_05") 提取數值代碼 (5)
+func _extract_npc_number(id_str: String) -> int:
+	var clean: String = id_str.replace("npc_", "").replace("NPC_", "")
+	if clean.is_valid_int():
+		return clean.to_int()
+	return 1
+

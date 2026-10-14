@@ -125,6 +125,28 @@ const FEATURE_NAMES: Array[String] = [
 ## 長期性格特質 (LTM - Long-Term Memory)：靈魂性格標籤
 @export var ltm_traits: Array[String] = []
 
+## LTM 12 大性格詞條布林開關 (對齊 SQLite LTM 資料表與 NormalDecision)
+@export var ltm_entries: Dictionary = {
+	"medicine_jar": false,    # 藥罐子 (健康 -10)
+	"healthy": false,         # 健康 (健康 +10)
+	"greedy": false,          # 貪吃 (飽食 -10)
+	"eat_like_a_bird": false, # 小鳥胃 (飽食 +10)
+	"social_person": false,   # 社交達人 (社交需求 +10)
+	"asocial": false,         # 社恐 (社交需求 -10)
+	"optimistic": false,      # 樂觀 (心情 +10)
+	"pessimistic": false,     # 悲觀 (心情 -10)
+	"debility": false,        # 虛弱
+	"strong": false,          # 強壯
+	"big_e": false,           # 大E (外向)
+	"big_i": false            # 大I (內向)
+}
+
+## LTM 9 大一般行為動態加權權重 (由換日結算 STM 演化更新)
+@export var action_weights: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+## 與其他 20 位 NPC 之 10 天歷史事件好壞分數 (0.0 ~ 1.0, 預設 0.5)
+@export var history_scores: Array[float] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+
 ## 最近一次社交模型 (ONNX) 評估快取 (含候選人分數與選定行為)
 @export var last_social_evaluation: Dictionary = {}
 
@@ -145,6 +167,7 @@ func _init() -> void:
 		personality_offset.fill(0.0)
 	if ltm_traits.is_empty():
 		_init_default_traits()
+	calculate_personality_offset_from_entries()
 
 ## 依職業或預設建立靈魂性格特質標籤
 func _init_default_traits() -> void:
@@ -159,6 +182,96 @@ func _init_default_traits() -> void:
 		8: ltm_traits = ["精打細算", "善於社交"]
 		9: ltm_traits = ["顧家溫暖", "隨和親切"]
 		_: ltm_traits = ["自由自在", "樂於探索"]
+
+## 依據 12 大性格詞條布林計算神經網路的輸入偏移量 (對齊 NormalDecision.cs)
+func calculate_personality_offset_from_entries() -> void:
+	if personality_offset.size() < 15:
+		personality_offset.resize(15)
+	personality_offset.fill(0.0)
+
+	# 1: Health (健康度)
+	if ltm_entries.get("medicine_jar", false):
+		personality_offset[1] -= 10.0
+	if ltm_entries.get("healthy", false):
+		personality_offset[1] += 10.0
+
+	# 3: Hunger (飽食度)
+	if ltm_entries.get("greedy", false):
+		personality_offset[3] -= 10.0
+	if ltm_entries.get("eat_like_a_bird", false):
+		personality_offset[3] += 10.0
+
+	# 4: Social Desire (社交慾望)
+	if ltm_entries.get("social_person", false):
+		personality_offset[4] -= 10.0
+	if ltm_entries.get("asocial", false):
+		personality_offset[4] += 10.0
+	if job_id == 9: # 家庭主婦提升社交需求
+		personality_offset[4] -= 10.0
+
+	# 5: Mood (心情)
+	if ltm_entries.get("optimistic", false):
+		personality_offset[5] += 10.0
+	if ltm_entries.get("pessimistic", false):
+		personality_offset[5] -= 10.0
+
+## 從 SQLite 記憶資料庫 (MTM / LTM / LTSM) 載入啟動數值 (對應圖 1)
+func apply_startup_data(data: Dictionary) -> void:
+	if data.is_empty() or not data.get("success", false):
+		return
+
+	# 1. 還原生理數值 (MTM)
+	if data.has("stats") and data["stats"] is Dictionary:
+		var st: Dictionary = data["stats"]
+		hp = float(st.get("hp", hp))
+		health = float(st.get("health", health))
+		stamina = float(st.get("stamina", stamina))
+		hunger = float(st.get("hunger", hunger))
+		social_desire = float(st.get("social_desire", social_desire))
+		mood = float(st.get("mood", mood))
+		money = int(st.get("money", money))
+		wood = int(st.get("wood", wood))
+		stone = int(st.get("stone", stone))
+		mineral = int(st.get("mineral", mineral))
+		crops = int(st.get("crops", crops))
+		fish = int(st.get("fish", fish))
+		food = int(st.get("food", food))
+		lunchbox = int(st.get("lunchbox", lunchbox))
+
+	# 2. 還原 12 大性格詞條 (LTM)
+	if data.has("entries") and data["entries"] is Dictionary:
+		var ent: Dictionary = data["entries"]
+		for k in ent.keys():
+			ltm_entries[k] = bool(ent[k])
+		calculate_personality_offset_from_entries()
+
+	# 3. 還原行動權重 (LTM)
+	if data.has("action_weights") and data["action_weights"] is Array:
+		var aw: Array = data["action_weights"]
+		action_weights.resize(aw.size())
+		for i in range(aw.size()):
+			action_weights[i] = float(aw[i])
+
+	# 4. 還原信任度與好感度 (LTSM)
+	if data.has("trust") and data["trust"] is Dictionary:
+		trust = data["trust"].duplicate()
+	if data.has("friendships") and data["friendships"] is Dictionary:
+		friendships = data["friendships"].duplicate()
+
+	# 5. 還原互動歷史分數 (0.0 ~ 1.0)
+	if data.has("history_scores") and data["history_scores"] is Array:
+		var hs: Array = data["history_scores"]
+		history_scores.resize(hs.size())
+		for i in range(hs.size()):
+			history_scores[i] = float(hs[i])
+
+	if data.has("job_id") and int(data["job_id"]) > 0:
+		job_id = int(data["job_id"])
+	if data.has("home_id") and int(data["home_id"]) > 0:
+		home_poi_id = int(data["home_id"])
+
+	stats_changed.emit(npc_id)
+
 
 # ------------------------------------------------------------------------------
 # 7. 代謝模擬 (Tick-Based Simulation)
@@ -291,6 +404,9 @@ func to_dict() -> Dictionary:
 		"stm_events": stm_events.duplicate(),
 		"last_interaction_days": last_interaction_days.duplicate(),
 		"ltm_traits": ltm_traits.duplicate(),
+		"ltm_entries": ltm_entries.duplicate(),
+		"action_weights": action_weights.duplicate(),
+		"history_scores": history_scores.duplicate(),
 		"last_social_evaluation": last_social_evaluation.duplicate(),
 		"personality_offset": Array(personality_offset)
 	}
@@ -334,6 +450,19 @@ func from_dict(data: Dictionary) -> void:
 		ltm_traits.clear()
 		for tr in data["ltm_traits"]:
 			ltm_traits.append(str(tr))
+	if data.has("ltm_entries") and data["ltm_entries"] is Dictionary:
+		ltm_entries = data["ltm_entries"].duplicate()
+		calculate_personality_offset_from_entries()
+	if data.has("action_weights") and data["action_weights"] is Array:
+		var aw: Array = data["action_weights"]
+		action_weights.resize(aw.size())
+		for i in range(aw.size()):
+			action_weights[i] = float(aw[i])
+	if data.has("history_scores") and data["history_scores"] is Array:
+		var hs: Array = data["history_scores"]
+		history_scores.resize(hs.size())
+		for i in range(hs.size()):
+			history_scores[i] = float(hs[i])
 	if data.has("last_social_evaluation") and data["last_social_evaluation"] is Dictionary:
 		last_social_evaluation = data["last_social_evaluation"].duplicate()
 
@@ -458,6 +587,71 @@ func get_days_since_interaction(target_id: String, current_day: int) -> float:
 ## 記錄與特定 NPC 發生互動
 func record_interaction(target_id: String, current_day: int) -> void:
 	last_interaction_days[target_id] = current_day
+
+## 取得生理數值字典 (供 C# 資料庫儲存與結算使用)
+func get_physiological_dict() -> Dictionary:
+	return {
+		"hp": hp,
+		"health": health,
+		"stamina": stamina,
+		"hunger": hunger,
+		"social_desire": social_desire,
+		"mood": mood,
+		"money": money,
+		"wood": wood,
+		"stone": stone,
+		"mineral": mineral,
+		"crops": crops,
+		"fish": fish,
+		"food": food,
+		"lunchbox": lunchbox
+	}
+
+## 套用行動造成的數值改變量 (由 attributeCalculator 計算產出)
+func apply_stat_changes(changes: Dictionary) -> void:
+	if changes.is_empty():
+		return
+	if changes.has("change_hp"):
+		hp = clampf(hp + float(changes["change_hp"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_health"):
+		health = clampf(health + float(changes["change_health"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_stamina"):
+		stamina = clampf(stamina + float(changes["change_stamina"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_hunger"):
+		hunger = clampf(hunger + float(changes["change_hunger"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_social_desire"):
+		social_desire = clampf(social_desire + float(changes["change_social_desire"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_mood"):
+		mood = clampf(mood + float(changes["change_mood"]), MIN_STAT, MAX_STAT)
+	if changes.has("change_money"):
+		money = clampi(money + int(changes["change_money"]), 0, 99999)
+	if changes.has("change_wood"):
+		wood = clampi(wood + int(changes["change_wood"]), 0, 9999)
+	if changes.has("change_stone"):
+		stone = clampi(stone + int(changes["change_stone"]), 0, 9999)
+	if changes.has("change_mineral"):
+		mineral = clampi(mineral + int(changes["change_mineral"]), 0, 9999)
+	if changes.has("change_crops"):
+		crops = clampi(crops + int(changes["change_crops"]), 0, 9999)
+	if changes.has("change_fish"):
+		fish = clampi(fish + int(changes["change_fish"]), 0, 9999)
+	if changes.has("change_food"):
+		food = clampi(food + int(changes["change_food"]), 0, 9999)
+	if changes.has("change_lunchbox"):
+		lunchbox = clampi(lunchbox + int(changes["change_lunchbox"]), 0, 9999)
+	stats_changed.emit(npc_id)
+
+## 套用換日結算更新的權重與歷史好壞分數 (對應圖 5: 步驟 9)
+func apply_settlement_data(new_weights: Array, new_history_scores: Array) -> void:
+	if not new_weights.is_empty():
+		action_weights.clear()
+		for w in new_weights:
+			action_weights.append(float(w))
+	if not new_history_scores.is_empty():
+		history_scores.clear()
+		for s in new_history_scores:
+			history_scores.append(float(s))
+	add_stm_event("換日記憶結算完成，行為權重與歷史分數已更新")
 
 ## 每日午夜記憶演化 (LTM / MTM / STM 結算)
 func evolve_midnight_memory(day: int) -> void:

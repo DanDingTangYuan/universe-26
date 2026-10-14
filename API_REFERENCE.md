@@ -578,6 +578,23 @@ enum LocationType {
 
 - **說明**：取得社交行為代碼對應的中文名稱。
 
+#### `initialize_memory_database(db_path: String = "res://NPC_Memory.db", force_reset: bool = false) -> bool`
+
+- **說明**：對應流程圖「圖 1 (新遊戲)」，於 SQLite 初始化 6 大記憶資料表（STSM, MTSM, LTSM, STM, MTM, LTM）並寫入預設數值。
+
+#### `has_memory_database(db_path: String = "res://NPC_Memory.db") -> bool`
+
+- **說明**：檢查記憶資料庫實體檔案是否存在。
+
+#### `load_npc_startup_data(npc_id: int, db_path: String = "res://NPC_Memory.db") -> Dictionary`
+
+- **說明**：對應流程圖「圖 1 (讀取存檔)」，依序從 MTM 載入數值、從 LTM 載入權重與詞條、從 LTSM 載入信任與好感，並從 MTSM 統計歷史正向事件比例計算歷史分數。
+- **回傳結構**：包含 `stats`（生理數值）、`entries`（12 項詞條）、`action_weights`（9 項權重）、`trust`、`friendships`、`history_scores` 與 `success: bool`。
+
+#### `store_npc_entry(npc_id: int, traits_dict: Dictionary, db_path: String = "res://NPC_Memory.db") -> bool`
+
+- **說明**：對應流程圖「圖 1 (新遊戲)」，將玩家或模板設定的 12 大性格詞條寫入 LTM 資料庫。
+
 ---
 
 ## 6. NPC 數據模型：NPCData (`scripts/entities/npc_data.gd`)
@@ -905,3 +922,90 @@ enum State {
 #### `close() -> void`
 
 - **說明**：關閉觀測視窗並取消全域選中狀態。
+
+---
+
+## 10. 記憶系統與換日結算管線 (Memory System & Midnight Settlement Pipeline)
+
+本系統依據五大架構流程圖（圖 1 啟動載入、圖 2 決策執行整體路徑、圖 3 一般決策、圖 4 社交決策、圖 5 換日結算記憶處理）實裝，底層整合 SQLite 6 大資料表（`STM`, `STSM`, `MTM`, `MTSM`, `LTM`, `LTSM`）與 C# 運算程式庫（`UseDatabase.cs`, `computeAttribute.cs`）。
+
+### 10.1 C# 記憶橋接層：NPCDecisionBridge (`ai_models/NPCDecisionBridge.cs`)
+
+#### `SaveNormalActionMemory(int npcId, int time, Godot.Collections.Dictionary statsDict, int action, int location, bool isSuccess, string dbPath = "res://NPC_Memory.db") -> Godot.Collections.Dictionary`
+
+- **對應流程**：圖 2 (行動完成或失敗 -> 計算數值增減 -> 儲存至 STM)。
+- **說明**：
+  1. 將 Godot 生理數值字典映射為 `npc_class.PhysiologicalStats`。
+  2. 透過 `attributeCalculator.ComputeNormalAttributes` 計算本次行動產生的數值增減量 (`ChangedStateValue`)。
+  3. 透過 `attributeCalculator.ComputeRewardValue` 計算 Reward 分數。
+  4. 呼叫 `UseDatabase.SaveMemory` 將單筆記錄寫入 SQLite `STM` 資料表。
+- **回傳值**：包含 `change_hp`, `change_health`, `change_stamina`, `change_hunger`, `change_social_desire`, `change_mood`, `change_money`, `change_food`, `change_lunchbox`, `reward_value`, `success` 等欄位之字典。
+
+#### `SaveSocialActionMemory(int sourceId, int targetId, int time, int socialAction, Godot.Collections.Dictionary sourceSocial, Godot.Collections.Dictionary targetSocial, string dbPath = "res://NPC_Memory.db") -> Godot.Collections.Dictionary`
+
+- **對應流程**：圖 4 (決定社交動作選項 -> 嘗試行動 -> 計算數值增減 -> 儲存至 STSM)。
+- **說明**：
+  1. 實例化雙方 NPC 之 `NPCclass` 並注入好感度與信任度。
+  2. 透過 `attributeCalculator.ComputeSocialAttributes` 計算社交互動後雙方的心情、信任度、好感度與體力增減。
+  3. 呼叫 `UseDatabase.SaveMemory(sourceNPC, targetNPC)` 寫入 2 筆雙向記錄至 `STSM` 資料表。
+- **回傳值**：包含 `source` 與 `target` 之數值增減字典及 `success` 標記。
+
+#### `ExecuteMidnightSettlement1(string dbPath = "res://NPC_Memory.db") -> bool`
+
+- **對應流程**：圖 5 換日結算前半（步驟 1 ~ 5）。
+- **說明**：
+  1. `SettleSTM()`：聚合當日 STM 中各行動之總 Reward，調用 `ComputeWeight` 計算新權重並更新至 `LTM`，隨後清空 `STM`。
+  2. `SettleMTSM()`：將所有中短期社交記憶重要性遞減 1 (`importance - 1`)，清理無文字內容且 `importance <= 0` 的記憶。
+  3. `SettleSTSM()`：將 STSM 所有當日互動紀錄透過 `DetermineSTSMType` 標記正負向並轉移至 `MTSM`（初始 `importance = 10`），隨後清空 `STSM`。
+- **回傳值**：結算前半成功則回傳 `true`。
+
+#### `ExecuteMidnightSettlement2(int npcId, Godot.Collections.Dictionary currentPhysiological, Godot.Collections.Dictionary currentTrust, Godot.Collections.Dictionary currentFriendships, string dbPath = "res://NPC_Memory.db") -> Godot.Collections.Dictionary`
+
+- **對應流程**：圖 5 換日結算後半（步驟 6 ~ 10）。
+- **說明**：
+  1. `SaveState`：將 NPC 當前生理數值歸檔儲存至 `MTM`，將對其他 20 隻 NPC 之好感與信任存入 `LTSM`。
+  2. `LoadHistoryEvent`：自 `MTSM` 重新計算該 NPC 與其他 20 位 NPC 之 10 天歷史事件好壞比例（`HistoryScores`，0.0~1.0）。
+  3. `LoadActionWeights`：自 `LTM` 讀取最新演化之一組 9 個行為加權權重（`ActionWeights`）。
+- **回傳值**：`{ "success": true, "action_weights": Array[float], "history_scores": Array[float] }`。
+
+---
+
+### 10.2 GDScript 決策大腦服務：NPCDecisionService (`scripts/ai/decision_service.gd`)
+
+#### `evaluate_decision(current_tick: int, stats: PackedFloat32Array, home_id: int, job_id: int, food_count: int, lunchbox_count: int, personality_offset: PackedFloat32Array = PackedFloat32Array(), npc_id: String = "", action_weights: Array = []) -> Dictionary`
+
+- **對應流程**：圖 3 (一般決策全流程)。
+- **更新**：新增 `action_weights` 參數。在無硬性排程規則干預時，依據 LTM 行動權重對 9 種行為分數進行加權調整，並使用輪盤抽樣（`SampleActionWithWeights`）挑選最終意圖。
+
+#### `save_normal_action_memory(npc_id: int, time: int, stats: Dictionary, action: int, location: int, is_success: bool, db_path: String = "res://NPC_Memory.db") -> Dictionary`
+
+- **說明**：轉發並呼叫 C# 橋接之一般行動執行期記憶儲存。
+
+#### `save_social_action_memory(source_id: int, target_id: int, time: int, social_action: int, source_social: Dictionary, target_social: Dictionary, db_path: String = "res://NPC_Memory.db") -> Dictionary`
+
+- **說明**：轉發並呼叫 C# 橋接之社交行動執行期記憶儲存。
+
+#### `execute_midnight_settlement_1(db_path: String = "res://NPC_Memory.db") -> bool`
+
+- **說明**：執行換日記憶結算前半管線。
+
+#### `execute_midnight_settlement_2(npc_id: int, current_stats: Dictionary, current_trust: Dictionary, current_friendships: Dictionary, db_path: String = "res://NPC_Memory.db") -> Dictionary`
+
+- **說明**：執行特定 NPC 之換日記憶結算後半管線，獲取最新權重與歷史好壞分數。
+
+---
+
+### 10.3 實體與全域單例整合
+
+#### `NPCData.get_physiological_dict() -> Dictionary` (`scripts/entities/npc_data.gd`)
+- **說明**：導出生理與物資欄位為符合 C# 規範之字典格式。
+
+#### `NPCData.apply_stat_changes(changes: Dictionary) -> void` (`scripts/entities/npc_data.gd`)
+- **說明**：套用行動結算後的數值改變量，包含邊界鉗制（Clamp）與 `stats_changed` 訊號廣播。
+
+#### `NPCData.apply_settlement_data(new_weights: Array, new_history_scores: Array) -> void` (`scripts/entities/npc_data.gd`)
+- **說明**：更新動態行為加權權重（`action_weights`）與人際歷史好壞分數（`history_scores`）。
+
+#### `GlobalClass._execute_midnight_settlement() -> void` (`scripts/core/global.gd`)
+- **說明**：於每日 00:00 (`current_tick == 0`) 跨日時自動觸發全域換日記憶結算，先執行前半清空與衰減管線，再遍歷全場 NPC 執行後半歸檔與數據同步。
+

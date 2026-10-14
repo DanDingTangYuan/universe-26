@@ -103,6 +103,7 @@ var _current_social_partner: NPCController = null
 var _pending_step_index: int = -1
 var _pending_on_complete: Callable = Callable()
 var _last_evaluated_social_score: float = 0.5
+var _action_memory_saved: bool = false
 
 # ------------------------------------------------------------------------------
 # 5. 生命週期 (Lifecycle)
@@ -253,7 +254,7 @@ func make_decision(current_tick: int) -> void:
 	if decision_service == null:
 		return
 
-	# 呼叫決策大腦 (融合排程規則 + 15 維度神經模型)
+	# 呼叫決策大腦 (融合排程規則 + 15 維度神經模型 + LTM 行動權重抽樣)
 	var decision: Dictionary = decision_service.evaluate_decision(
 		current_tick,
 		npc_data.to_feature_vector(),
@@ -262,10 +263,12 @@ func make_decision(current_tick: int) -> void:
 		npc_data.food,
 		npc_data.lunchbox,
 		npc_data.personality_offset,
-		npc_data.npc_id
+		npc_data.npc_id,
+		npc_data.action_weights
 	)
 
 	last_decision = decision
+	_action_memory_saved = false
 
 	var action_id: int = int(decision.get("best_action", 0))
 	var action_name: String = String(decision.get("best_action_name", "閒逛"))
@@ -727,18 +730,75 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 	show_bubble(3.0)
 	other_npc.show_bubble(3.0)
 
-	# 調整彼此好感度、社交渴望與心情
+	# 依據圖 4 進行社交決策與記憶寫入 (STSM)
 	if npc_data and other_npc.npc_data:
-		npc_data.modify_relationship(other_npc.npc_data.npc_id, 3.0, 2.0)
-		other_npc.npc_data.modify_relationship(npc_data.npc_id, 3.0, 2.0)
+		var g: Node = _get_global()
+		var decision_service: DecisionServiceClass = g.get_decision_service() if g else null
+		var s_num: int = _extract_npc_number(npc_data.npc_id)
+		var t_num: int = _extract_npc_number(other_npc.npc_data.npc_id)
+		var cur_tick: int = _get_current_tick()
+		var cur_day: int = _get_current_day()
 
-		npc_data.social_desire = clampf(npc_data.social_desire + 40.0, 0.0, 100.0)
-		npc_data.mood = clampf(npc_data.mood + 15.0, 0.0, 100.0)
-		npc_data.stats_changed.emit(npc_data.npc_id)
+		var social_action: int = 1 # 預設普通聊天 (1~7)
+		if decision_service:
+			social_action = decision_service.decide_social_action(t_num, false)
 
-		other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
-		other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + 15.0, 0.0, 100.0)
-		other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
+		var s_social: Dictionary = {
+			"trust_to_target": npc_data.get_trust(other_npc.npc_data.npc_id),
+			"fav_to_target": npc_data.get_friendship(other_npc.npc_data.npc_id)
+		}
+		var t_social: Dictionary = {
+			"trust_to_source": other_npc.npc_data.get_trust(npc_data.npc_id),
+			"fav_to_source": other_npc.npc_data.get_friendship(npc_data.npc_id)
+		}
+
+		var res: Dictionary = {}
+		if decision_service and decision_service.is_database_available():
+			res = decision_service.save_social_action_memory(
+				s_num,
+				t_num,
+				cur_tick,
+				social_action,
+				s_social,
+				t_social
+			)
+
+		if res.get("success", false):
+			var s_ch: Dictionary = res.get("source", {})
+			var t_ch: Dictionary = res.get("target", {})
+
+			npc_data.modify_relationship(other_npc.npc_data.npc_id, float(s_ch.get("change_favorability", 0)), float(s_ch.get("change_trust", 0)))
+			npc_data.mood = clampf(npc_data.mood + float(s_ch.get("change_mood", 0)), 0.0, 100.0)
+			npc_data.stamina = clampf(npc_data.stamina + float(s_ch.get("change_stamina", 0)), 0.0, 100.0)
+			npc_data.social_desire = clampf(npc_data.social_desire + 40.0, 0.0, 100.0)
+			npc_data.record_interaction(other_npc.npc_data.npc_id, cur_day)
+			npc_data.stats_changed.emit(npc_data.npc_id)
+
+			other_npc.npc_data.modify_relationship(npc_data.npc_id, float(t_ch.get("change_favorability", 0)), float(t_ch.get("change_trust", 0)))
+			other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + float(t_ch.get("change_mood", 0)), 0.0, 100.0)
+			other_npc.npc_data.stamina = clampf(other_npc.npc_data.stamina + float(t_ch.get("change_stamina", 0)), 0.0, 100.0)
+			other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
+			other_npc.npc_data.record_interaction(npc_data.npc_id, cur_day)
+			other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
+
+			var action_str: String = decision_service.get_social_action_name(social_action) if decision_service else "社交互動"
+			print("[NPCController] %s 與 %s 展開社交 [%s]，記憶已寫入 STSM" % [npc_data.npc_id, other_npc.npc_data.npc_id, action_str])
+		else:
+			# 備用純規則平緩調整
+			npc_data.modify_relationship(other_npc.npc_data.npc_id, 3.0, 2.0)
+			other_npc.npc_data.modify_relationship(npc_data.npc_id, 3.0, 2.0)
+			npc_data.social_desire = clampf(npc_data.social_desire + 40.0, 0.0, 100.0)
+			npc_data.mood = clampf(npc_data.mood + 15.0, 0.0, 100.0)
+			npc_data.record_interaction(other_npc.npc_data.npc_id, cur_day)
+			npc_data.stats_changed.emit(npc_data.npc_id)
+
+			other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
+			other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + 15.0, 0.0, 100.0)
+			other_npc.npc_data.record_interaction(npc_data.npc_id, cur_day)
+			other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
+
+	_action_memory_saved = true
+	other_npc._action_memory_saved = true
 
 	_action_timer = 3.2
 	other_npc._action_timer = 3.2
@@ -840,7 +900,7 @@ func move_along_grid(target_cell: Vector2i, on_complete: Callable = Callable()) 
 	var nav = _get_nav_manager()
 	if nav == null:
 		push_warning("[NPCController] 未能取得 NavigationManager，移動終止。")
-		_complete_current_action()
+		_complete_current_action(false)
 		return
 
 	var start_cell: Vector2i = nav.local_to_map(global_position)
@@ -856,7 +916,7 @@ func move_along_grid(target_cell: Vector2i, on_complete: Callable = Callable()) 
 	if path.size() <= 1:
 		# 無法尋得路徑或被阻擋
 		push_warning("[NPCController] %s 無法尋得由 %s 至 %s 之有效路徑。" % [name, str(start_cell), str(target_cell)])
-		_complete_current_action()
+		_complete_current_action(false)
 		return
 
 	_current_path = path
@@ -918,11 +978,17 @@ func _step_move(step_index: int, on_complete: Callable) -> void:
 # ------------------------------------------------------------------------------
 
 func _on_action_timer_finished() -> void:
-	_complete_current_action()
+	_complete_current_action(true)
 
-func _complete_current_action() -> void:
+func _complete_current_action(is_success: bool = true) -> void:
 	if not _is_executing_action and current_state == State.IDLE:
 		return
+
+	# 依據圖 2：若為一般行動且尚未寫入記憶，計算數值增減並儲存至 STM
+	if not _action_memory_saved and current_action_id >= 0 and current_action_id != 6:
+		_save_normal_action_memory(current_action_id, is_success)
+		_action_memory_saved = true
+
 	_is_executing_action = false
 	is_social_target = false
 	if is_instance_valid(_current_social_partner):
@@ -930,9 +996,55 @@ func _complete_current_action() -> void:
 		_current_social_partner = null
 		partner.is_social_target = false
 		partner._current_social_partner = null
-		partner._complete_current_action()
+		partner._complete_current_action(is_success)
 	action_completed.emit(current_action_id)
 	set_state(State.IDLE)
+
+## 依據圖 2：計算一般行動數值增減並儲存至 STM
+func _save_normal_action_memory(action_id: int, is_success: bool) -> void:
+	if npc_data == null or action_id < 0 or action_id == 6:
+		return
+	var g: Node = _get_global()
+	if g == null:
+		return
+	var decision_service: DecisionServiceClass = g.get_decision_service()
+	if decision_service == null or not decision_service.is_database_available():
+		return
+
+	var npc_num: int = _extract_npc_number(npc_data.npc_id)
+	if npc_num <= 0:
+		return
+
+	var cur_tick: int = _get_current_tick()
+	var stats_dict: Dictionary = npc_data.get_physiological_dict()
+	var loc: int = int(last_decision.get("target_location", 0))
+
+	var res: Dictionary = decision_service.save_normal_action_memory(
+		npc_num,
+		cur_tick,
+		stats_dict,
+		action_id,
+		loc,
+		is_success
+	)
+
+	if res.get("success", false):
+		npc_data.apply_stat_changes(res)
+		var act_name: String = decision_service.get_action_name(action_id)
+		var r_val: float = float(res.get("reward_value", 0.0))
+		print("[NPCController] %s 完成行動 [%s] (成功=%s)，數值已更新並存入 STM (Reward: %.2f)" % [npc_data.npc_id, act_name, str(is_success), r_val])
+
+func _get_current_tick() -> int:
+	var g: Node = _get_global()
+	if g and "current_tick" in g:
+		return int(g.current_tick)
+	return 480
+
+func _get_current_day() -> int:
+	var g: Node = _get_global()
+	if g and "current_day" in g:
+		return int(g.current_day)
+	return 1
 
 func _initialize_position() -> void:
 	var nav = _get_nav_manager()
