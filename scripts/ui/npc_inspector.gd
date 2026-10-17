@@ -43,11 +43,16 @@ var _mood_bar: ProgressBar = null
 var _money_label: Label = null
 var _inventory_label: Label = null
 
+# 行為動態權重 (Tab 1)
+var _action_weights_label: Label = null
+
 # 社交大腦與靈魂記憶 UI 元件 (Tab 2)
 var _social_engine_label: Label = null
 var _social_target_label: Label = null
 var _social_act_label: Label = null
+var _social_feedback_label: Label = null
 var _social_time_label: Label = null
+var _social_radar_box: VBoxContainer = null
 var _ltm_label: Label = null
 var _mtm_label: Label = null
 var _stm_vbox: VBoxContainer = null
@@ -60,6 +65,17 @@ const ACTION_NAMES: Array[String] = [
 	"閒逛", "閱讀", "購物", "吃東西", "就醫",
 	"回家休息", "社交", "巡田水", "販售物品"
 ]
+
+# 社交具體行為圖示與名稱 (1 ~ 7)
+const SOCIAL_ACTION_ICONS: Dictionary = {
+	1: "💬 普通聊天",
+	2: "💡 討論主題",
+	3: "❓ 詢問問題",
+	4: "🤝 共同活動",
+	5: "🎭 捉弄他人",
+	6: "🤫 欺騙隱瞞",
+	7: "📢 訊息傳播"
+}
 
 # ------------------------------------------------------------------------------
 # 2. 生命週期 (Lifecycle)
@@ -91,10 +107,10 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------------------------
 
 func _build_ui() -> void:
-	# 主面板容器 (橫向精巧尺寸: 380 x 210)
+	# 主面板容器 (橫向精巧尺寸: 460 x 275)
 	_panel = PanelContainer.new()
 	_panel.name = "InspectorCard"
-	_panel.custom_minimum_size = Vector2(410, 250)
+	_panel.custom_minimum_size = Vector2(460, 275)
 
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.06, 0.08, 0.12, 0.94) # 深邃黑藍半透明
@@ -204,6 +220,13 @@ func _build_ui() -> void:
 	_score_box.set("theme_override_constants/separation", 2)
 	left_vbox.add_child(_score_box)
 
+	_action_weights_label = Label.new()
+	_action_weights_label.text = "🎯 LTM 習慣: 工作 1.0x | 休息 1.0x"
+	_action_weights_label.add_theme_font_size_override("font_size", 9)
+	_action_weights_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.9))
+	_action_weights_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	left_vbox.add_child(_action_weights_label)
+
 	# 垂直分隔線
 	page_vitals.add_child(VSeparator.new())
 
@@ -257,7 +280,7 @@ func _build_ui() -> void:
 	# ===== 社交欄 (左) =====
 	var soc_left: VBoxContainer = VBoxContainer.new()
 	soc_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	soc_left.set("theme_override_constants/separation", 3)
+	soc_left.set("theme_override_constants/separation", 2)
 	page_social.add_child(soc_left)
 
 	var soc_title: Label = Label.new()
@@ -268,28 +291,48 @@ func _build_ui() -> void:
 
 	_social_engine_label = Label.new()
 	_social_engine_label.text = "引擎: 🚀 C# ONNX (7維推論)"
-	_social_engine_label.add_theme_font_size_override("font_size", 10)
+	_social_engine_label.add_theme_font_size_override("font_size", 9)
 	_social_engine_label.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
 	soc_left.add_child(_social_engine_label)
 
 	_social_target_label = Label.new()
 	_social_target_label.text = "對象: 尚無近期互動"
-	_social_target_label.add_theme_font_size_override("font_size", 10)
+	_social_target_label.add_theme_font_size_override("font_size", 9)
 	_social_target_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25))
 	soc_left.add_child(_social_target_label)
 
 	_social_act_label = Label.new()
 	_social_act_label.text = "行為: 普通聊天 (加權輪盤)"
-	_social_act_label.add_theme_font_size_override("font_size", 10)
+	_social_act_label.add_theme_font_size_override("font_size", 9)
 	_social_act_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
 	soc_left.add_child(_social_act_label)
 
+	_social_feedback_label = Label.new()
+	_social_feedback_label.text = "反饋: 尚未產生互動記憶"
+	_social_feedback_label.add_theme_font_size_override("font_size", 9)
+	_social_feedback_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.7))
+	_social_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	soc_left.add_child(_social_feedback_label)
+
 	_social_time_label = Label.new()
 	_social_time_label.text = "特徵: 距離/好感/上次天數"
-	_social_time_label.add_theme_font_size_override("font_size", 9)
-	_social_time_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	_social_time_label.add_theme_font_size_override("font_size", 8)
+	_social_time_label.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
 	_social_time_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	soc_left.add_child(_social_time_label)
+
+	var radar_sep: HSeparator = HSeparator.new()
+	soc_left.add_child(radar_sep)
+
+	var radar_title: Label = Label.new()
+	radar_title.text = "📡 周遭 NPC 意向雷達 (32格):"
+	radar_title.add_theme_font_size_override("font_size", 9)
+	radar_title.add_theme_color_override("font_color", Color(0.9, 0.75, 0.3))
+	soc_left.add_child(radar_title)
+
+	_social_radar_box = VBoxContainer.new()
+	_social_radar_box.set("theme_override_constants/separation", 1)
+	soc_left.add_child(_social_radar_box)
 
 	page_social.add_child(VSeparator.new())
 
@@ -501,12 +544,27 @@ func _update_npc_data() -> void:
 			data.wood, data.stone, data.mineral, data.crops, data.fish, data.food, data.lunchbox
 		]
 
+		# LTM 行為習慣加權 (午夜結算演化)
+		if _action_weights_label:
+			if data.action_weights.size() >= 9:
+				var w_items: Array = []
+				for w_i in range(9):
+					var w_name: String = NPCData.ACTION_WEIGHT_NAMES[w_i] if w_i < NPCData.ACTION_WEIGHT_NAMES.size() else "行為%d" % w_i
+					w_items.append({"name": w_name, "w": data.action_weights[w_i]})
+				w_items.sort_custom(func(a, b): return a["w"] > b["w"])
+				var w_parts: Array[String] = []
+				for wi in range(mini(3, w_items.size())):
+					w_parts.append("%s: %.2fx" % [w_items[wi]["name"], w_items[wi]["w"]])
+				_action_weights_label.text = "🎯 LTM 習慣: %s" % " | ".join(w_parts)
+			else:
+				_action_weights_label.text = "🎯 LTM 習慣: 均等加權 (1.00x)"
+
 		# 4. 社交大腦與靈魂記憶更新 (Tab 2)
 		var decision_service = global_node.get_decision_service() if global_node and global_node.has_method("get_decision_service") else null
 		var is_social_ready: bool = decision_service.is_social_engine_available() if decision_service else false
 		if _social_engine_label:
 			if is_social_ready:
-				_social_engine_label.text = "引擎: 🚀 C# ONNX (npc_interaction_mlp)"
+				_social_engine_label.text = "引擎: 🚀 C# ONNX (時/慾/心/好/距/天/史)"
 				_social_engine_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
 			else:
 				_social_engine_label.text = "引擎: ⚙️ 原生降級推論"
@@ -528,9 +586,22 @@ func _update_npc_data() -> void:
 				_social_act_label.text = "行為: 待機中"
 				_social_act_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 			else:
-				var act_name: String = str(last_eval.get("action_name", "普通聊天"))
-				_social_act_label.text = "行為: %s (加權輪盤選中)" % act_name
+				var act_id: int = int(last_eval.get("action_id", 1))
+				var act_icon_str: String = SOCIAL_ACTION_ICONS.get(act_id, str(last_eval.get("action_name", "普通聊天")))
+				var role_str: String = "發起" if bool(last_eval.get("is_initiator", true)) else "回應"
+				_social_act_label.text = "行為: %s (%s)" % [act_icon_str, role_str]
 				_social_act_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
+
+		if _social_feedback_label:
+			if last_eval.is_empty():
+				_social_feedback_label.text = "反饋: 尚未產生互動記憶"
+				_social_feedback_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+			else:
+				var df: float = float(last_eval.get("delta_fav", 0.0))
+				var dt: float = float(last_eval.get("delta_trust", 0.0))
+				var dm: float = float(last_eval.get("delta_mood", 0.0))
+				_social_feedback_label.text = "反饋: 好感%+0.1f | 信任%+0.1f | 心情%+0.1f" % [df, dt, dm]
+				_social_feedback_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.7))
 
 		if _social_time_label:
 			if last_eval.is_empty():
@@ -539,16 +610,49 @@ func _update_npc_data() -> void:
 				var t_stamp: String = str(last_eval.get("timestamp", ""))
 				_social_time_label.text = "時間: %s (7維神經網絡運算)" % t_stamp
 
-		# LTM 特質
+		# 5. 周遭 NPC 社交意願雷達 (即時評估身邊村民的 ONNX 意願)
+		if _social_radar_box and ctrl.has_method("get_nearby_social_candidates"):
+			for ch in _social_radar_box.get_children():
+				ch.queue_free()
+
+			var radar_list: Array[Dictionary] = ctrl.get_nearby_social_candidates()
+			if radar_list.is_empty():
+				var empty_lbl: Label = Label.new()
+				empty_lbl.text = "• 32 格內暫無其他居民"
+				empty_lbl.add_theme_font_size_override("font_size", 9)
+				empty_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+				_social_radar_box.add_child(empty_lbl)
+			else:
+				var max_show: int = mini(3, radar_list.size())
+				for k in range(max_show):
+					var c_info: Dictionary = radar_list[k]
+					var c_name: String = str(c_info.get("name", "NPC"))
+					var c_dist: float = float(c_info.get("distance", 0.0))
+					var c_score: float = float(c_info.get("score", 0.0))
+					var c_str_id: String = str(c_info.get("str_id", "")).replace("npc_", "NPC ")
+
+					var r_row: HBoxContainer = HBoxContainer.new()
+					var r_lbl: Label = Label.new()
+					r_lbl.text = "• %s (%s): 意向 %.1f%% (%.1f格)" % [c_str_id, c_name, c_score * 100.0, c_dist]
+					r_lbl.add_theme_font_size_override("font_size", 9)
+					r_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85) if k > 0 else Color(1.0, 0.9, 0.4))
+					r_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					r_row.add_child(r_lbl)
+					_social_radar_box.add_child(r_row)
+
+		# 6. LTM 特質 (12 大靈魂性格詞條)
 		if _ltm_label:
-			var traits_str: String = ", ".join(data.ltm_traits) if data.ltm_traits.size() > 0 else "隨和親切"
+			var active_traits: Array[String] = data.get_active_ltm_trait_labels()
+			var traits_str: String = " ".join(active_traits.map(func(t: String) -> String: return "[%s]" % t))
 			_ltm_label.text = "特質(LTM): %s" % traits_str
 
-		# MTM 人際關係
+		# 7. MTM / LTSM 人際關係與 10 天歷史事件分數
 		if _mtm_label:
 			var top_friends: Array = []
 			for fid in data.friendships.keys():
-				top_friends.append({"id": fid, "f": data.friendships[fid], "t": data.get_trust(fid)})
+				var num_id: int = _extract_npc_number(fid)
+				var h_score: float = data.get_history_score_to_npc(num_id)
+				top_friends.append({"id": fid, "f": data.friendships[fid], "t": data.get_trust(fid), "h": h_score})
 			top_friends.sort_custom(func(a, b): return a["f"] > b["f"])
 			if top_friends.is_empty():
 				_mtm_label.text = "人際(MTM): 尚無熟識居民"
@@ -556,10 +660,11 @@ func _update_npc_data() -> void:
 				var rel_str_parts: Array[String] = []
 				for k in range(mini(2, top_friends.size())):
 					var tf = top_friends[k]
-					rel_str_parts.append("%s (好感%.0f/信%.0f)" % [tf["id"].replace("npc_", "NPC"), tf["f"], tf["t"]])
+					var h_pct: int = int(round(float(tf["h"]) * 100.0))
+					rel_str_parts.append("%s (好感%.0f/信%.0f | 歷史%d%%)" % [tf["id"].replace("npc_", "NPC "), tf["f"], tf["t"], h_pct])
 				_mtm_label.text = "人際(MTM): %s" % " | ".join(rel_str_parts)
 
-		# STM 事件清單
+		# 8. STM 事件清單 (近期生活與社交日誌)
 		if _stm_vbox:
 			for ch in _stm_vbox.get_children():
 				ch.queue_free()
@@ -724,3 +829,10 @@ func _get_nav_manager():
 	if g and g.has_method("get_navigation_manager"):
 		return g.get_navigation_manager()
 	return null
+
+func _extract_npc_number(id_str: String) -> int:
+	var clean: String = id_str.replace("npc_", "").replace("NPC_", "").strip_edges()
+	if clean.is_valid_int():
+		return clean.to_int()
+	return 1
+

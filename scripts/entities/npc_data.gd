@@ -125,6 +125,27 @@ const FEATURE_NAMES: Array[String] = [
 ## 長期性格特質 (LTM - Long-Term Memory)：靈魂性格標籤
 @export var ltm_traits: Array[String] = []
 
+## 12 大性格特質中文名稱對照表 (對齊 SQLite LTM 資料表)
+const LTM_TRAIT_NAMES: Dictionary = {
+	"medicine_jar": "藥罐子",
+	"healthy": "健康強健",
+	"greedy": "貪吃",
+	"eat_like_a_bird": "小鳥胃",
+	"social_person": "社交達人",
+	"asocial": "社恐孤僻",
+	"optimistic": "樂觀開朗",
+	"pessimistic": "悲觀憂慮",
+	"debility": "體質虛弱",
+	"strong": "筋骨強壯",
+	"big_e": "大E外向",
+	"big_i": "大I內斂"
+}
+
+## 9 大行為動態加權中文名稱 (對齊 NormalDecision.cs)
+const ACTION_WEIGHT_NAMES: Array[String] = [
+	"進食", "如廁", "工作", "就醫", "午睡", "洗澡", "社交", "娛樂", "散步"
+]
+
 ## LTM 12 大性格詞條布林開關 (對齊 SQLite LTM 資料表與 NormalDecision)
 @export var ltm_entries: Dictionary = {
 	"medicine_jar": false,    # 藥罐子 (健康 -10)
@@ -149,6 +170,23 @@ const FEATURE_NAMES: Array[String] = [
 
 ## 最近一次社交模型 (ONNX) 評估快取 (含候選人分數與選定行為)
 @export var last_social_evaluation: Dictionary = {}
+
+## 取得當前已啟用的 LTM 靈魂特質中文清單 (若 LTM entries 無啟用項目則退回 ltm_traits)
+func get_active_ltm_trait_labels() -> Array[String]:
+	var result: Array[String] = []
+	for key in ltm_entries.keys():
+		if bool(ltm_entries[key]):
+			result.append(LTM_TRAIT_NAMES.get(key, key))
+	if result.is_empty():
+		return ltm_traits
+	return result
+
+## 取得對指定 NPC 編號 (1~20) 之 10 天歷史事件好壞分數 (0.0 ~ 1.0)
+func get_history_score_to_npc(target_num: int) -> float:
+	var idx: int = target_num - 1
+	if idx >= 0 and idx < history_scores.size():
+		return history_scores[idx]
+	return 0.5
 
 ## 動態修飾器陣列 (符合 AGENTS.md 規範: 實體需帶有 Modifiers 陣列)
 ## 每項為 Dictionary: { "id": String, "stat": String, "value_per_tick": float, "duration": int }

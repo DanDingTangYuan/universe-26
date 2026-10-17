@@ -103,6 +103,7 @@ var _current_social_partner: NPCController = null
 var _pending_step_index: int = -1
 var _pending_on_complete: Callable = Callable()
 var _last_evaluated_social_score: float = 0.5
+var _last_candidates_eval: Dictionary = {}
 var _action_memory_saved: bool = false
 
 # ------------------------------------------------------------------------------
@@ -763,39 +764,96 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 				t_social
 			)
 
+		var action_str: String = decision_service.get_social_action_name(social_action) if decision_service else "普通聊天"
+		var s_history: float = npc_data.get_history_score_to_npc(t_num)
+		var t_history: float = other_npc.npc_data.get_history_score_to_npc(s_num)
+		var s_name: String = npc_data.npc_name if not npc_data.npc_name.is_empty() else name
+		var t_name: String = other_npc.npc_data.npc_name if not other_npc.npc_data.npc_name.is_empty() else other_npc.name
+		var time_str: String = "第 %d 天 %02d:%02d" % [cur_day, cur_tick / 60, cur_tick % 60]
+
+		var s_delta_fav: float = 0.0
+		var s_delta_trust: float = 0.0
+		var s_delta_mood: float = 0.0
+		var t_delta_fav: float = 0.0
+		var t_delta_trust: float = 0.0
+		var t_delta_mood: float = 0.0
+
 		if res.get("success", false):
 			var s_ch: Dictionary = res.get("source", {})
 			var t_ch: Dictionary = res.get("target", {})
+			s_delta_fav = float(s_ch.get("change_favorability", 0))
+			s_delta_trust = float(s_ch.get("change_trust", 0))
+			s_delta_mood = float(s_ch.get("change_mood", 0))
+			t_delta_fav = float(t_ch.get("change_favorability", 0))
+			t_delta_trust = float(t_ch.get("change_trust", 0))
+			t_delta_mood = float(t_ch.get("change_mood", 0))
 
-			npc_data.modify_relationship(other_npc.npc_data.npc_id, float(s_ch.get("change_favorability", 0)), float(s_ch.get("change_trust", 0)))
-			npc_data.mood = clampf(npc_data.mood + float(s_ch.get("change_mood", 0)), 0.0, 100.0)
+			npc_data.modify_relationship(other_npc.npc_data.npc_id, s_delta_fav, s_delta_trust)
+			npc_data.mood = clampf(npc_data.mood + s_delta_mood, 0.0, 100.0)
 			npc_data.stamina = clampf(npc_data.stamina + float(s_ch.get("change_stamina", 0)), 0.0, 100.0)
 			npc_data.social_desire = clampf(npc_data.social_desire + 40.0, 0.0, 100.0)
 			npc_data.record_interaction(other_npc.npc_data.npc_id, cur_day)
-			npc_data.stats_changed.emit(npc_data.npc_id)
 
-			other_npc.npc_data.modify_relationship(npc_data.npc_id, float(t_ch.get("change_favorability", 0)), float(t_ch.get("change_trust", 0)))
-			other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + float(t_ch.get("change_mood", 0)), 0.0, 100.0)
+			other_npc.npc_data.modify_relationship(npc_data.npc_id, t_delta_fav, t_delta_trust)
+			other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + t_delta_mood, 0.0, 100.0)
 			other_npc.npc_data.stamina = clampf(other_npc.npc_data.stamina + float(t_ch.get("change_stamina", 0)), 0.0, 100.0)
 			other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
 			other_npc.npc_data.record_interaction(npc_data.npc_id, cur_day)
-			other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
 
-			var action_str: String = decision_service.get_social_action_name(social_action) if decision_service else "社交互動"
 			print("[NPCController] %s 與 %s 展開社交 [%s]，記憶已寫入 STSM" % [npc_data.npc_id, other_npc.npc_data.npc_id, action_str])
 		else:
 			# 備用純規則平緩調整
+			s_delta_fav = 3.0
+			s_delta_trust = 2.0
+			s_delta_mood = 15.0
+			t_delta_fav = 3.0
+			t_delta_trust = 2.0
+			t_delta_mood = 15.0
+
 			npc_data.modify_relationship(other_npc.npc_data.npc_id, 3.0, 2.0)
 			other_npc.npc_data.modify_relationship(npc_data.npc_id, 3.0, 2.0)
 			npc_data.social_desire = clampf(npc_data.social_desire + 40.0, 0.0, 100.0)
 			npc_data.mood = clampf(npc_data.mood + 15.0, 0.0, 100.0)
 			npc_data.record_interaction(other_npc.npc_data.npc_id, cur_day)
-			npc_data.stats_changed.emit(npc_data.npc_id)
 
 			other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
 			other_npc.npc_data.mood = clampf(other_npc.npc_data.mood + 15.0, 0.0, 100.0)
 			other_npc.npc_data.record_interaction(npc_data.npc_id, cur_day)
-			other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
+
+		# 雙向寫入最近社交評估快取 (供 NPCInspector 即時呈現 ONNX 社交大腦數據)
+		npc_data.last_social_evaluation = {
+			"target_id": other_npc.npc_data.npc_id,
+			"target_name": "%s (%s)" % [other_npc.npc_data.npc_id.replace("npc_", "NPC "), t_name],
+			"score": _last_evaluated_social_score,
+			"action_id": social_action,
+			"action_name": action_str,
+			"timestamp": time_str,
+			"is_initiator": true,
+			"history_score": s_history,
+			"delta_fav": s_delta_fav,
+			"delta_trust": s_delta_trust,
+			"delta_mood": s_delta_mood
+		}
+		other_npc.npc_data.last_social_evaluation = {
+			"target_id": npc_data.npc_id,
+			"target_name": "%s (%s)" % [npc_data.npc_id.replace("npc_", "NPC "), s_name],
+			"score": _last_evaluated_social_score,
+			"action_id": social_action,
+			"action_name": action_str,
+			"timestamp": time_str,
+			"is_initiator": false,
+			"history_score": t_history,
+			"delta_fav": t_delta_fav,
+			"delta_trust": t_delta_trust,
+			"delta_mood": t_delta_mood
+		}
+
+		# 雙向寫入生活日誌 (STM)
+		npc_data.add_stm_event("與 %s 互動: %s (好感%+0.1f/信任%+0.1f)" % [t_name, action_str, s_delta_fav, s_delta_trust])
+		other_npc.npc_data.add_stm_event("與 %s 互動: %s (好感%+0.1f/信任%+0.1f)" % [s_name, action_str, t_delta_fav, t_delta_trust])
+
+		npc_data.stats_changed.emit(npc_data.npc_id)
+		other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
 
 	_action_memory_saved = true
 	other_npc._action_memory_saved = true
@@ -1111,7 +1169,7 @@ func _find_available_partner() -> NPCController:
 					var fav: float = npc_data.get_friendship(target_str_id) if npc_data else 50.0
 					var cur_day: int = g.current_day if "current_day" in g else 1
 					var days_since: float = npc_data.get_days_since_interaction(target_str_id, cur_day) if npc_data else 3.0
-					var hist: float = (npc_data.get_trust(target_str_id) / 100.0) if npc_data else 0.5
+					var hist: float = npc_data.get_history_score_to_npc(num_id) if npc_data else 0.5
 
 					candidates.append({
 						"id": num_id,
@@ -1131,6 +1189,7 @@ func _find_available_partner() -> NPCController:
 		var s_desire: float = npc_data.social_desire if npc_data else 50.0
 		var s_mood: float = npc_data.mood if npc_data else 50.0
 		var eval_res: Dictionary = decision_service.evaluate_social_candidates(cur_tick, s_desire, s_mood, candidates)
+		_last_candidates_eval = eval_res
 		var chosen_id: int = int(eval_res.get("target_id", -1))
 		if chosen_id > 0 and candidate_ctrls.has(chosen_id):
 			_last_evaluated_social_score = float(eval_res.get("score", 0.5))
@@ -1147,6 +1206,67 @@ func _find_available_partner() -> NPCController:
 			best_p = c
 	_last_evaluated_social_score = 0.5
 	return best_p
+
+## 取得最近一次或即時掃描周遭 32 格內的社交候選人意願評分列表 (供觀測 UI 呈現社交雷達)
+func get_nearby_social_candidates() -> Array[Dictionary]:
+	var g: Node = _get_global()
+	if g == null:
+		return []
+	var decision_service = g.get_decision_service()
+	var all_npcs: Array[Node2D] = g.get_all_npcs()
+	var candidates: Array = []
+	var cur_day: int = g.current_day if "current_day" in g else 1
+
+	for npc in all_npcs:
+		if npc != self and npc is NPCController:
+			var ctrl: NPCController = npc as NPCController
+			if ctrl.is_dead or ctrl.is_concealed:
+				continue
+			var d_pixels: float = global_position.distance_to(ctrl.global_position)
+			var d_tiles: float = d_pixels / 16.0
+			if d_tiles <= 32.0:
+				var target_str_id: String = ctrl.npc_data.npc_id if ctrl.npc_data else ctrl.name
+				var num_id: int = _extract_npc_number(target_str_id)
+				var fav: float = npc_data.get_friendship(target_str_id) if npc_data else 50.0
+				var days_since: float = npc_data.get_days_since_interaction(target_str_id, cur_day) if npc_data else 3.0
+				var hist: float = npc_data.get_history_score_to_npc(num_id) if npc_data else 0.5
+				var t_name: String = ctrl.name if ctrl.npc_data == null else ctrl.npc_data.npc_name
+
+				candidates.append({
+					"id": num_id,
+					"name": t_name,
+					"str_id": target_str_id,
+					"distance": d_tiles,
+					"favorability": fav,
+					"days_since_interaction": days_since,
+					"history_score": hist,
+					"score": 0.0
+				})
+
+	if candidates.is_empty():
+		return []
+
+	if decision_service and decision_service.is_social_engine_available():
+		var cur_tick: float = float(g.current_tick) if "current_tick" in g else 720.0
+		var s_desire: float = npc_data.social_desire if npc_data else 50.0
+		var s_mood: float = npc_data.mood if npc_data else 50.0
+		var eval_res: Dictionary = decision_service.evaluate_social_candidates(cur_tick, s_desire, s_mood, candidates)
+		var c_scores: Dictionary = eval_res.get("candidate_scores", {})
+		for cand in candidates:
+			var cid: int = int(cand["id"])
+			if c_scores.has(cid):
+				cand["score"] = float(c_scores[cid])
+	else:
+		for cand in candidates:
+			var f_ratio: float = float(cand["favorability"]) / 100.0
+			var d_ratio: float = 1.0 - (float(cand["distance"]) / 32.0)
+			cand["score"] = clampf(f_ratio * 0.7 + d_ratio * 0.3, 0.0, 1.0)
+
+	var typed_candidates: Array[Dictionary] = []
+	for c in candidates:
+		typed_candidates.append(c as Dictionary)
+	typed_candidates.sort_custom(func(a, b): return a["score"] > b["score"])
+	return typed_candidates
 
 ## 檢查特定網格地塊是否已被任何非隱蔽且活著的 NPC 佔用
 func _is_cell_occupied(cell: Vector2i, exclude_npc: NPCController = null) -> bool:
