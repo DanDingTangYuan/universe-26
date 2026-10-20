@@ -46,22 +46,23 @@ public class NPCDecision : IDisposable
     public NPCDecision(string onnxPath, string normalizationPath)
     {
         // 檢查 ONNX
-        if (!File.Exists(onnxPath))
+        if (!Universe26.ModelResourceLoader.Exists(onnxPath))
         {
             throw new FileNotFoundException("找不到 ONNX 模型：", onnxPath);
         }
 
         // 檢查 JSON
-        if (!File.Exists(normalizationPath))
+        if (!Universe26.ModelResourceLoader.Exists(normalizationPath))
         {
             throw new FileNotFoundException("找不到 normalization.json：", normalizationPath);
         }
 
         // 載入 ONNX
-        session = new InferenceSession(onnxPath);
+        byte[] modelBytes = Universe26.ModelResourceLoader.LoadBytes(onnxPath);
+        session = new InferenceSession(modelBytes);
 
         // 載入 normalization.json
-        string json = File.ReadAllText(normalizationPath);
+        string json = Universe26.ModelResourceLoader.LoadText(normalizationPath);
         NormalizationData? data = JsonSerializer.Deserialize<NormalizationData>(json);
         if (data == null)
         {

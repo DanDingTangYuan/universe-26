@@ -57,6 +57,16 @@ var _ltm_label: Label = null
 var _mtm_label: Label = null
 var _stm_vbox: VBoxContainer = null
 
+# 全鎮人際關係網絡 UI 元件 (Tab 3)
+var _rel_summary_label: Label = null
+var _rel_list_vbox: VBoxContainer = null
+var _rel_update_timer: float = 0.0
+
+# 居民已知情報觀測 UI 元件 (Tab 4)
+var _rumor_summary_label: Label = null
+var _rumor_list_vbox: VBoxContainer = null
+var _rumor_update_timer: float = 0.0
+
 var _focus_btn: Button = null
 var _close_btn: Button = null
 
@@ -107,10 +117,10 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------------------------
 
 func _build_ui() -> void:
-	# 主面板容器 (橫向精巧尺寸: 460 x 275)
+	# 主面板容器 (橫向精巧尺寸: 460 x 280)
 	_panel = PanelContainer.new()
 	_panel.name = "InspectorCard"
-	_panel.custom_minimum_size = Vector2(460, 275)
+	_panel.custom_minimum_size = Vector2(460, 280)
 
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.06, 0.08, 0.12, 0.94) # 深邃黑藍半透明
@@ -372,6 +382,74 @@ func _build_ui() -> void:
 	_stm_vbox.set("theme_override_constants/separation", 1)
 	mem_right.add_child(_stm_vbox)
 
+	# ==============================
+	# 分頁三：🤝 人際網絡 (全鎮好感度矩陣)
+	# ==============================
+	var page_relations: VBoxContainer = VBoxContainer.new()
+	page_relations.name = "🤝 人際網絡"
+	page_relations.set("theme_override_constants/separation", 4)
+	page_relations.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tab_container.add_child(page_relations)
+
+	var rel_header: HBoxContainer = HBoxContainer.new()
+	page_relations.add_child(rel_header)
+
+	_rel_summary_label = Label.new()
+	_rel_summary_label.text = "👥 全鎮居民友好度排行 (依好感度排序)"
+	_rel_summary_label.add_theme_font_size_override("font_size", 10)
+	_rel_summary_label.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
+	_rel_summary_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rel_header.add_child(_rel_summary_label)
+
+	var rel_tip_label: Label = Label.new()
+	rel_tip_label.text = "點擊 🔍 切換觀測"
+	rel_tip_label.add_theme_font_size_override("font_size", 9)
+	rel_tip_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	rel_header.add_child(rel_tip_label)
+
+	var rel_scroll: ScrollContainer = ScrollContainer.new()
+	rel_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rel_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rel_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rel_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	page_relations.add_child(rel_scroll)
+
+	_rel_list_vbox = VBoxContainer.new()
+	_rel_list_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rel_list_vbox.set("theme_override_constants/separation", 2)
+	rel_scroll.add_child(_rel_list_vbox)
+
+	# ==============================
+	# 分頁四：📜 已知情報 (情報擴散微觀驗證)
+	# ==============================
+	var page_rumors: VBoxContainer = VBoxContainer.new()
+	page_rumors.name = "📜 已知情報"
+	page_rumors.set("theme_override_constants/separation", 4)
+	page_rumors.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tab_container.add_child(page_rumors)
+
+	var rum_header: HBoxContainer = HBoxContainer.new()
+	page_rumors.add_child(rum_header)
+
+	_rumor_summary_label = Label.new()
+	_rumor_summary_label.text = "🧠 該居民已獲知 0 條情報 (溯源與轉述鏈)"
+	_rumor_summary_label.add_theme_font_size_override("font_size", 10)
+	_rumor_summary_label.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
+	_rumor_summary_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rum_header.add_child(_rumor_summary_label)
+
+	var rum_scroll: ScrollContainer = ScrollContainer.new()
+	rum_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rum_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rum_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rum_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	page_rumors.add_child(rum_scroll)
+
+	_rumor_list_vbox = VBoxContainer.new()
+	_rumor_list_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rumor_list_vbox.set("theme_override_constants/separation", 3)
+	rum_scroll.add_child(_rumor_list_vbox)
+
 	root_vbox.add_child(HSeparator.new())
 
 	# --- 底部狀態與聚焦列 (Footer) ---
@@ -589,7 +667,8 @@ func _update_npc_data() -> void:
 				var act_id: int = int(last_eval.get("action_id", 1))
 				var act_icon_str: String = SOCIAL_ACTION_ICONS.get(act_id, str(last_eval.get("action_name", "普通聊天")))
 				var role_str: String = "發起" if bool(last_eval.get("is_initiator", true)) else "回應"
-				_social_act_label.text = "行為: %s (%s)" % [act_icon_str, role_str]
+				var phase_str: String = str(last_eval.get("phase", "破冰期"))
+				_social_act_label.text = "行為: %s (%s | %s)" % [act_icon_str, role_str, phase_str]
 				_social_act_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
 
 		if _social_feedback_label:
@@ -601,7 +680,12 @@ func _update_npc_data() -> void:
 				var dt: float = float(last_eval.get("delta_trust", 0.0))
 				var dm: float = float(last_eval.get("delta_mood", 0.0))
 				_social_feedback_label.text = "反饋: 好感%+0.1f | 信任%+0.1f | 心情%+0.1f" % [df, dt, dm]
-				_social_feedback_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.7))
+				if df > 0.0:
+					_social_feedback_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+				elif df < 0.0:
+					_social_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+				else:
+					_social_feedback_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 
 		if _social_time_label:
 			if last_eval.is_empty():
@@ -610,7 +694,7 @@ func _update_npc_data() -> void:
 				var t_stamp: String = str(last_eval.get("timestamp", ""))
 				_social_time_label.text = "時間: %s (7維神經網絡運算)" % t_stamp
 
-		# 5. 周遭 NPC 社交意願雷達 (即時評估身邊村民的 ONNX 意願)
+		# 5. 周遭 NPC 社交意願雷達 (即時評估身邊村民的 ONNX 意願與立方放大選中機率)
 		if _social_radar_box and ctrl.has_method("get_nearby_social_candidates"):
 			for ch in _social_radar_box.get_children():
 				ch.queue_free()
@@ -629,13 +713,16 @@ func _update_npc_data() -> void:
 					var c_name: String = str(c_info.get("name", "NPC"))
 					var c_dist: float = float(c_info.get("distance", 0.0))
 					var c_score: float = float(c_info.get("score", 0.0))
+					var c_prob: float = float(c_info.get("prob", 0.0))
+					var is_top: bool = bool(c_info.get("is_top", false))
 					var c_str_id: String = str(c_info.get("str_id", "")).replace("npc_", "NPC ")
 
 					var r_row: HBoxContainer = HBoxContainer.new()
 					var r_lbl: Label = Label.new()
-					r_lbl.text = "• %s (%s): 意向 %.1f%% (%.1f格)" % [c_str_id, c_name, c_score * 100.0, c_dist]
+					var top_tag: String = " ★首選" if is_top else ""
+					r_lbl.text = "• %s (%s): 意向%.0f%% [機率%.0f%%] (%.1f格)%s" % [c_str_id, c_name, c_score * 100.0, c_prob * 100.0, c_dist, top_tag]
 					r_lbl.add_theme_font_size_override("font_size", 9)
-					r_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85) if k > 0 else Color(1.0, 0.9, 0.4))
+					r_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2) if is_top else Color(0.8, 0.85, 0.9))
 					r_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 					r_row.add_child(r_lbl)
 					_social_radar_box.add_child(r_row)
@@ -682,6 +769,18 @@ func _update_npc_data() -> void:
 					ev_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
 					ev_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 					_stm_vbox.add_child(ev_lbl)
+
+		# 9. 全鎮人際關係網絡分頁 (Tab 3) 更新 (節流每 0.5 秒或選取時立即刷新)
+		_rel_update_timer -= get_process_delta_time()
+		if _rel_update_timer <= 0.0:
+			_rel_update_timer = 0.5
+			_update_relations_data(ctrl, data)
+
+		# 10. 已知情報分頁 (Tab 4) 更新 (節流每 0.5 秒刷新)
+		_rumor_update_timer -= get_process_delta_time()
+		if _rumor_update_timer <= 0.0:
+			_rumor_update_timer = 0.5
+			_update_rumor_data(ctrl, data)
 
 func _update_top_scores(scores: PackedFloat32Array) -> void:
 	for child in _score_box.get_children():
@@ -737,6 +836,192 @@ func _update_state_badge_color(state: NPCController.State) -> void:
 			_state_badge.add_theme_color_override("font_color", Color(0.7, 0.5, 1.0))
 
 # ------------------------------------------------------------------------------
+# 5.1 全鎮人際關係網絡分頁邏輯 (Tab 3: Relationships Matrix)
+# ------------------------------------------------------------------------------
+
+func _update_relations_data(ctrl: NPCController, data: NPCData) -> void:
+	if _rel_list_vbox == null or data == null:
+		return
+
+	var global_node: Node = _get_global()
+	if global_node == null:
+		return
+
+	var all_npcs: Array[Node2D] = global_node.get_all_npcs()
+	if all_npcs.is_empty():
+		return
+
+	var items: Array[Dictionary] = []
+	for other_node in all_npcs:
+		if not is_instance_valid(other_node) or other_node == ctrl:
+			continue
+		var other_data: NPCData = other_node.get("npc_data") as NPCData
+		if other_data == null or other_data.npc_id == data.npc_id:
+			continue
+
+		var o_id: String = other_data.npc_id
+		var f_val: float = data.get_friendship(o_id)
+		var t_val: float = data.get_trust(o_id)
+		var is_roommate: bool = (data.home_poi_id == other_data.home_poi_id and data.home_poi_id > 0)
+		var other_dead: bool = bool(other_node.get("is_dead")) if other_node.get("is_dead") != null else false
+
+		items.append({
+			"node": other_node,
+			"id": o_id,
+			"name": other_data.npc_name,
+			"job_id": other_data.job_id,
+			"friendship": f_val,
+			"trust": t_val,
+			"is_roommate": is_roommate,
+			"is_dead": other_dead
+		})
+
+	# 依好感度降序排序 (若相同則依信任度降序)
+	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if not is_equal_approx(a["friendship"], b["friendship"]):
+			return a["friendship"] > b["friendship"]
+		return a["trust"] > b["trust"]
+	)
+
+	# 檢查是否需要重建節點結構
+	var need_rebuild: bool = (_rel_list_vbox.get_child_count() != items.size())
+	if need_rebuild:
+		for ch in _rel_list_vbox.get_children():
+			ch.queue_free()
+
+	for i in range(items.size()):
+		var item: Dictionary = items[i]
+		var tier_info: Dictionary = _get_relationship_tier_info(item["friendship"])
+		var row: HBoxContainer = null
+
+		if need_rebuild:
+			row = HBoxContainer.new()
+			row.name = "Row_%d" % i
+			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.set("theme_override_constants/separation", 4)
+
+			var name_lbl: Label = Label.new()
+			name_lbl.name = "NameLbl"
+			name_lbl.custom_minimum_size = Vector2(100, 0)
+			name_lbl.add_theme_font_size_override("font_size", 9)
+			row.add_child(name_lbl)
+
+			var job_lbl: Label = Label.new()
+			job_lbl.name = "JobLbl"
+			job_lbl.custom_minimum_size = Vector2(56, 0)
+			job_lbl.add_theme_font_size_override("font_size", 9)
+			row.add_child(job_lbl)
+
+			var tier_lbl: Label = Label.new()
+			tier_lbl.name = "TierLbl"
+			tier_lbl.custom_minimum_size = Vector2(56, 0)
+			tier_lbl.add_theme_font_size_override("font_size", 9)
+			row.add_child(tier_lbl)
+
+			var f_pbar: ProgressBar = ProgressBar.new()
+			f_pbar.name = "PBar"
+			f_pbar.custom_minimum_size = Vector2(46, 8)
+			f_pbar.max_value = 100.0
+			f_pbar.show_percentage = false
+
+			var f_bg: StyleBoxFlat = StyleBoxFlat.new()
+			f_bg.bg_color = Color(0.12, 0.14, 0.18, 0.8)
+			f_bg.set_corner_radius_all(2)
+			f_pbar.add_theme_stylebox_override("background", f_bg)
+
+			var f_fill: StyleBoxFlat = StyleBoxFlat.new()
+			f_fill.set_corner_radius_all(2)
+			f_fill.bg_color = tier_info["color"]
+			f_pbar.add_theme_stylebox_override("fill", f_fill)
+			row.add_child(f_pbar)
+
+			var score_lbl: Label = Label.new()
+			score_lbl.name = "ScoreLbl"
+			score_lbl.custom_minimum_size = Vector2(85, 0)
+			score_lbl.add_theme_font_size_override("font_size", 9)
+			row.add_child(score_lbl)
+
+			var spacer: Control = Control.new()
+			spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(spacer)
+
+			var inspect_btn: Button = Button.new()
+			inspect_btn.name = "InspectBtn"
+			inspect_btn.text = "🔍"
+			inspect_btn.flat = true
+			inspect_btn.custom_minimum_size = Vector2(24, 16)
+			inspect_btn.add_theme_font_size_override("font_size", 9)
+			row.add_child(inspect_btn)
+
+			_rel_list_vbox.add_child(row)
+		else:
+			row = _rel_list_vbox.get_child(i) as HBoxContainer
+
+		if row == null:
+			continue
+
+		var name_lbl: Label = row.get_node_or_null("NameLbl") as Label
+		var job_lbl: Label = row.get_node_or_null("JobLbl") as Label
+		var tier_lbl: Label = row.get_node_or_null("TierLbl") as Label
+		var f_pbar: ProgressBar = row.get_node_or_null("PBar") as ProgressBar
+		var score_lbl: Label = row.get_node_or_null("ScoreLbl") as Label
+		var inspect_btn: Button = row.get_node_or_null("InspectBtn") as Button
+
+		if name_lbl:
+			var clean_id_str: String = item["id"].replace("npc_", "#").replace("NPC_", "#")
+			name_lbl.text = "%2d. %s (%s)" % [i + 1, item["name"], clean_id_str]
+			name_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.6) if item["is_roommate"] else Color(0.9, 0.9, 0.9))
+
+		if job_lbl:
+			if item["is_roommate"]:
+				job_lbl.text = "🏠同居"
+				job_lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.9))
+			else:
+				job_lbl.text = "[%s]" % _get_job_name(item["job_id"])
+				job_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.85))
+
+		if tier_lbl:
+			tier_lbl.text = "[%s]" % tier_info["name"]
+			tier_lbl.add_theme_color_override("font_color", tier_info["color"])
+
+		if f_pbar:
+			f_pbar.value = item["friendship"]
+			var fill_sb: StyleBoxFlat = f_pbar.get_theme_stylebox("fill") as StyleBoxFlat
+			if fill_sb:
+				fill_sb.bg_color = tier_info["color"]
+
+		if score_lbl:
+			score_lbl.text = "好感:%.0f 信:%.0f" % [item["friendship"], item["trust"]]
+			score_lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
+
+		if inspect_btn:
+			var target_node: Node2D = item["node"]
+			var connections: Array = inspect_btn.pressed.get_connections()
+			for conn in connections:
+				inspect_btn.pressed.disconnect(conn["callable"])
+			inspect_btn.pressed.connect(func():
+				if is_instance_valid(target_node):
+					var camera: Camera2D = get_viewport().get_camera_2d()
+					if camera and camera.has_method("move_to"):
+						camera.call("move_to", target_node.global_position)
+					elif camera:
+						camera.global_position = target_node.global_position
+					inspect_npc(target_node)
+			)
+
+func _get_relationship_tier_info(friendship: float) -> Dictionary:
+	if friendship >= 80.0:
+		return {"name": "莫逆之交", "color": Color(1.0, 0.45, 0.75)}
+	elif friendship >= 65.0:
+		return {"name": "志同道合", "color": Color(0.4, 0.95, 0.5)}
+	elif friendship >= 45.0:
+		return {"name": "點頭之交", "color": Color(0.7, 0.85, 1.0)}
+	elif friendship >= 25.0:
+		return {"name": "淡漠生疏", "color": Color(0.95, 0.75, 0.4)}
+	else:
+		return {"name": "交惡宿敵", "color": Color(1.0, 0.35, 0.35)}
+
+# ------------------------------------------------------------------------------
 # 6. 公開操作方法與訊號 (Public API & Signals)
 # ------------------------------------------------------------------------------
 
@@ -748,6 +1033,7 @@ func inspect_npc(npc: Node2D) -> void:
 
 	_target_npc = npc
 	visible = true
+	_rel_update_timer = 0.0 # 強制立即刷新人際關係
 
 	# 立即重置至角色側邊
 	var screen_pos: Vector2 = _target_npc.get_global_transform_with_canvas().origin
@@ -758,6 +1044,9 @@ func inspect_npc(npc: Node2D) -> void:
 func close() -> void:
 	_target_npc = null
 	visible = false
+	if _rel_list_vbox:
+		for ch in _rel_list_vbox.get_children():
+			ch.queue_free()
 	var g: Node = _get_global()
 	if g and g.has_method("deselect_npc"):
 		g.deselect_npc()
@@ -812,6 +1101,7 @@ func _get_poi_desc(poi_id: int) -> String:
 		19: return "圖書館"
 		20: return "廣場"
 		21: return "自宅"
+		22: return "布告欄"
 	if poi_id >= 1 and poi_id <= 11:
 		return "住宅 %d 號" % poi_id
 	return "地點 %d" % poi_id
@@ -835,4 +1125,92 @@ func _extract_npc_number(id_str: String) -> int:
 	if clean.is_valid_int():
 		return clean.to_int()
 	return 1
+
+# ------------------------------------------------------------------------------
+# 5.2 居民已知情報分頁邏輯 (Tab 4: Known Rumors & Propagation)
+# ------------------------------------------------------------------------------
+
+func _update_rumor_data(ctrl: NPCController, data: NPCData) -> void:
+	if _rumor_list_vbox == null or data == null:
+		return
+
+	var global_node: Node = _get_global()
+	if global_node == null or not global_node.has_method("get_diffusion_manager"):
+		return
+
+	var diff_mgr = global_node.get_diffusion_manager()
+	if diff_mgr == null:
+		return
+
+	var rumors_dict: Dictionary = data.known_rumors
+	if _rumor_summary_label:
+		_rumor_summary_label.text = "🧠 %s 腦中已獲知 %d 條城鎮情報 (微觀溯源)" % [data.npc_name, rumors_dict.size()]
+
+	# 清空現有項目並重新渲染
+	for ch in _rumor_list_vbox.get_children():
+		ch.queue_free()
+
+	if rumors_dict.is_empty():
+		var empty_lbl: Label = Label.new()
+		empty_lbl.text = "• 此居民目前尚未聽聞任何情報或小鎮傳聞。"
+		empty_lbl.add_theme_font_size_override("font_size", 9)
+		empty_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		_rumor_list_vbox.add_child(empty_lbl)
+		return
+
+	for r_id in rumors_dict.keys():
+		var r_entry: Dictionary = rumors_dict[r_id]
+		var rumor: Dictionary = diff_mgr.get_rumor_by_id(r_id)
+		var r_title: String = rumor.get("title", "未命名情報")
+		var r_cat_cn: String = rumor.get("category_cn", "通用情報")
+		var from_name: String = str(r_entry.get("learned_from_name", "公佈欄"))
+		var gen: int = int(r_entry.get("generation", 1))
+		var l_day: int = int(r_entry.get("learned_day", 1))
+		var l_tick: int = int(r_entry.get("learned_tick", 0))
+		var time_str: String = "第 %d 天 %02d:%02d" % [l_day, l_tick / 60, l_tick % 60]
+		var shared_list: Array = r_entry.get("shared_to", [])
+
+		var card: PanelContainer = PanelContainer.new()
+		var card_style: StyleBoxFlat = StyleBoxFlat.new()
+		card_style.bg_color = Color(0.12, 0.15, 0.22, 0.85)
+		card_style.set_corner_radius_all(4)
+		card_style.set_content_margin_all(5)
+		card.add_theme_stylebox_override("panel", card_style)
+
+		var cvbox: VBoxContainer = VBoxContainer.new()
+		cvbox.set("theme_override_constants/separation", 2)
+		card.add_child(cvbox)
+
+		# 標題列
+		var title_lbl: Label = Label.new()
+		title_lbl.text = "📢 [%s] %s" % [r_cat_cn, r_title]
+		title_lbl.add_theme_font_size_override("font_size", 10)
+		title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+		cvbox.add_child(title_lbl)
+
+		# 來源資訊
+		var src_lbl: Label = Label.new()
+		src_lbl.text = "📥 來源: %s 於 %s 告知 (傳播世代: G%d)" % [from_name, time_str, gen]
+		src_lbl.add_theme_font_size_override("font_size", 9)
+		src_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.6))
+		cvbox.add_child(src_lbl)
+
+		# 轉述狀況
+		var share_lbl: Label = Label.new()
+		if shared_list.is_empty():
+			share_lbl.text = "📤 轉述: 尚未向任何人分享"
+			share_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+		else:
+			var formatted_shared: Array[String] = []
+			for target_id in shared_list:
+				var t_npc = global_node.get_npc(target_id)
+				var t_name: String = t_npc.get("npc_data").npc_name if (t_npc and t_npc.get("npc_data")) else target_id
+				formatted_shared.append(t_name)
+			share_lbl.text = "📤 轉述: 已向 [%s] 等 %d 位居民分享" % [", ".join(formatted_shared), shared_list.size()]
+			share_lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		share_lbl.add_theme_font_size_override("font_size", 9)
+		cvbox.add_child(share_lbl)
+
+		_rumor_list_vbox.add_child(card)
+
 

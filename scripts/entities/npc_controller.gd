@@ -82,6 +82,21 @@ var is_dead: bool = false
 ## 死亡原因 (例如 "飢餓衰竭", "體力枯竭")
 var death_cause: String = ""
 
+## 是否處於昏倒/昏厥倒地狀態
+var is_fainted: bool = false
+
+## 昏厥原因 (例如 "體力竭盡昏厥", "飢餓虛脫")
+var fainted_cause: String = ""
+
+## 昏厥持續累積 Ticks (超過門檻未獲救治可能導致傷重不治)
+var fainted_elapsed_ticks: int = 0
+
+## 醫護人員專用：是否正處於外勤緊急救援任務中
+var is_rescuing: bool = false
+
+## 當前執行中之急救事件資料
+var _current_rescue_emergency: Dictionary = {}
+
 ## 是否正被其他 NPC 選定為社交對象 (避免多人同時鎖定同一人)
 var is_social_target: bool = false
 
@@ -94,11 +109,19 @@ const MAX_SOCIAL_SEARCH_DIST: float = 160.0
 ## 社交面對面判定有效距離 (約 2 格以內)
 const SOCIAL_INTERACT_DIST: float = 38.0
 
+## 行動超時看門狗最大持續 Ticks (60 Ticks = 60 遊戲分鐘 = 1 遊戲小時)
+const MAX_ACTION_TICKS: int = 60
+
+## 社交鎖定超時保護最大持續 Ticks (15 Ticks = 15 遊戲分鐘，若發起方超時未達則解除鎖定)
+const MAX_SOCIAL_TARGET_TICKS: int = 15
+
 var _current_path: Array[Vector2i] = []
 var _move_tween: Tween = null
 var _last_decision_tick: int = -1
 var _is_executing_action: bool = false
 var _action_timer: float = 0.0
+var _action_elapsed_ticks: int = 0
+var _social_target_elapsed_ticks: int = 0
 var _current_social_partner: NPCController = null
 var _pending_step_index: int = -1
 var _pending_on_complete: Callable = Callable()
@@ -120,6 +143,8 @@ func _ready() -> void:
 	if npc_data:
 		if not npc_data.hp_depleted.is_connected(_on_hp_depleted):
 			npc_data.hp_depleted.connect(_on_hp_depleted)
+		if not npc_data.hunger_critical.is_connected(_on_hunger_critical):
+			npc_data.hunger_critical.connect(_on_hunger_critical)
 
 	# 2. 向全域單例註冊自身與監聽時間/暫停/倍速/午夜訊號
 	var global_node: Node = _get_global()
@@ -147,8 +172,11 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	if npc_data and npc_data.hp_depleted.is_connected(_on_hp_depleted):
-		npc_data.hp_depleted.disconnect(_on_hp_depleted)
+	if npc_data:
+		if npc_data.hp_depleted.is_connected(_on_hp_depleted):
+			npc_data.hp_depleted.disconnect(_on_hp_depleted)
+		if npc_data.hunger_critical.is_connected(_on_hunger_critical):
+			npc_data.hunger_critical.disconnect(_on_hunger_critical)
 
 	# 卸載時從全域註銷
 	var global_node: Node = _get_global()
@@ -226,13 +254,73 @@ func _on_global_tick_passed(current_tick: int) -> void:
 	if is_dead or npc_data == null:
 		return
 
+	# 0. 昏迷倒地狀態處理
+	if is_fainted:
+		fainted_elapsed_ticks += 1
+		# 若昏迷過久且生命耗盡，超過 300 Ticks (5 遊戲小時) 未被及時施救，宣告傷重不治
+		if fainted_elapsed_ticks >= 300 and npc_data.hp <= 0.0:
+			die(fainted_cause if not fainted_cause.is_empty() else "昏迷重傷不治")
+			return
+		# 每隔 15 Ticks 冒出虛弱氣泡
+		if fainted_elapsed_ticks % 15 == 0:
+			show_speech_bubble("💫 昏迷中...", 2.0)
+		return
+
 	# 1. 根據目前狀態推進生理代謝
 	var is_sleeping: bool = (current_state == State.RESTING)
 	var is_working: bool = (current_state == State.WORKING)
 	npc_data.tick_update(1, is_sleeping, is_working)
 
-	# 2. 自動決策判斷
-	if auto_ai_enabled and not _is_executing_action and not is_social_target:
+	# 生理極限昏厥檢查 (若體力跌至 0 且飽食度過低，非休養狀態下體力不支倒地)
+	if npc_data.stamina <= 0.0 and npc_data.hunger < 15.0 and current_state != State.RESTING and not is_fainted:
+		faint("極度過勞虛脫")
+		return
+
+	# 看門狗 1: 社交鎖定超時保護 (避免發起方途中受阻或被中斷導致對方永久定格)
+	if is_social_target and current_state != State.INTERACTING:
+		_social_target_elapsed_ticks += 1
+		if _social_target_elapsed_ticks >= MAX_SOCIAL_TARGET_TICKS:
+			is_social_target = false
+			_social_target_elapsed_ticks = 0
+	else:
+		_social_target_elapsed_ticks = 0
+
+	# 看門狗 2: 行動超時看門狗 (防止任何尋路、Tween 或協程未釋放導致 AI 決策被外層守衛永久阻斷)
+	if _is_executing_action:
+		_action_elapsed_ticks += 1
+		if _action_elapsed_ticks >= MAX_ACTION_TICKS:
+			push_warning("[NPCController] %s 行動超時 (%d Ticks)，強制中止並重置狀態！" % [npc_data.npc_id, _action_elapsed_ticks])
+			_abort_and_reset_action()
+	else:
+		_action_elapsed_ticks = 0
+
+	# 生理飢餓強制自救中斷 (Emergency Survival Interrupt)
+	# 若飽食度跌破 20.0 且目前未在進食中，無論任何常規/工作/社交行動立即強制中斷自救
+	if npc_data.hunger < 20.0 and current_action_id != 3 and not is_rescuing:
+		_handle_emergency_starvation(current_tick)
+		return
+
+	# 2. 路人巡視周遭：非隱藏且未出診狀態下，週期性檢查身邊是否有倒地昏迷者並自主通報
+	if not is_concealed and not is_rescuing and (current_tick % 3 == 0):
+		_check_and_report_nearby_emergencies()
+
+	# 3. 醫護人員專用：當班執勤且醫院當前無病患時，自主出診救援倒地市民
+	if npc_data.job_id == 5 and not is_rescuing:
+		_check_doctor_rescue_duty(current_tick)
+
+	# 4. 自動決策判斷
+	if auto_ai_enabled and not _is_executing_action and not is_social_target and not is_rescuing and not is_fainted:
+		# 若目前處於休息狀態 (如夜間就寢或休養中)，且尚未到晨起時間，不進行反覆決策
+		if current_state == State.RESTING:
+			if _is_bedtime_hour(current_tick) or (npc_data and npc_data.stamina < 75.0 and current_action_id == 5):
+				return # 繼續安穩睡眠休養，不發起新決策亦不重複寫入記憶
+			else:
+				# 晨起 (06:00) 或體力恢復充足，甦醒切換至 IDLE 準備迎接新的一天
+				if is_concealed:
+					exit_building()
+				set_state(State.IDLE)
+				current_action_id = 0
+
 		# 每隔一定 Ticks 或目前處於閒置狀態時觸發 AI 決策
 		if current_state == State.IDLE or (_last_decision_tick < 0) or (current_tick - _last_decision_tick >= decision_interval_ticks):
 			_last_decision_tick = current_tick
@@ -244,7 +332,7 @@ func _on_global_tick_passed(current_tick: int) -> void:
 
 ## 觸發一次 AI 決策
 func make_decision(current_tick: int) -> void:
-	if is_dead or is_social_target:
+	if is_dead or is_fainted or is_social_target or is_rescuing:
 		return
 
 	var global_node: Node = _get_global()
@@ -255,7 +343,8 @@ func make_decision(current_tick: int) -> void:
 	if decision_service == null:
 		return
 
-	# 呼叫決策大腦 (融合排程規則 + 15 維度神經模型 + LTM 行動權重抽樣)
+	# 呼叫決策大腦 (融合排程規則 + 15 維度神經模型 + LTM 行動權重抽樣 + 體力休養遲滯保護)
+	var is_resting: bool = (current_state == State.RESTING or current_action_id == 5 or (npc_data != null and npc_data.is_exhausted))
 	var decision: Dictionary = decision_service.evaluate_decision(
 		current_tick,
 		npc_data.to_feature_vector(),
@@ -265,7 +354,9 @@ func make_decision(current_tick: int) -> void:
 		npc_data.lunchbox,
 		npc_data.personality_offset,
 		npc_data.npc_id,
-		npc_data.action_weights
+		npc_data.action_weights,
+		is_resting,
+		current_action_id
 	)
 
 	last_decision = decision
@@ -285,10 +376,11 @@ func make_decision(current_tick: int) -> void:
 
 ## 執行特定決策行為
 func _execute_action(action_id: int, target_poi: int) -> void:
-	if is_dead:
+	if is_dead or is_fainted or is_rescuing:
 		return
 
 	_is_executing_action = true
+	_action_elapsed_ticks = 0
 
 	# 檢查是否為官方工作排程 (依據決策系統之工作判定，且目標為指定工作 POI)
 	var is_work_duty: bool = last_decision.get("is_work_schedule", false) or last_decision.get("best_action_name", "").begins_with("執勤工作")
@@ -312,7 +404,7 @@ func _execute_action(action_id: int, target_poi: int) -> void:
 				show_bubble(2.5)
 				if npc_data:
 					npc_data.mood = clampf(npc_data.mood + 20.0, 0.0, 100.0)
-					npc_data.stamina = clampf(npc_data.stamina - 5.0, 0.0, 100.0)
+					npc_data.stamina = clampf(npc_data.stamina - 1.0, 0.0, 100.0) # 閱讀屬靜態活動，微量消耗體力
 					npc_data.stats_changed.emit(npc_data.npc_id)
 			)
 		2: # 購物 (餐廳 POI 13 或 商店 POI 12 - 依據 Google 道具表：料理與便當各 $3)
@@ -349,8 +441,12 @@ func _execute_action(action_id: int, target_poi: int) -> void:
 							# 點餐享用正餐 (花費 $3)
 							npc_data.consume_item("money", 3)
 							npc_data.hunger = clampf(npc_data.hunger + 60.0, 0.0, 100.0)
-							npc_data.stamina = clampf(npc_data.stamina + 25.0, 0.0, 100.0)
+							npc_data.stamina = clampf(npc_data.stamina + 35.0, 0.0, 100.0)
 							npc_data.mood = clampf(npc_data.mood + 20.0, 0.0, 100.0)
+							# 外帶備份糧食：若身上無便當且尚有餘額，順便購買 1 個外帶便當防餓
+							if npc_data.money >= 3 and npc_data.lunchbox == 0:
+								npc_data.consume_item("money", 3)
+								npc_data.add_item("lunchbox", 1)
 						elif npc_data.eat_food(true):
 							# 身上有便當或料理，在餐廳座位上享用
 							pass
@@ -360,7 +456,7 @@ func _execute_action(action_id: int, target_poi: int) -> void:
 							if pay > 0:
 								npc_data.consume_item("money", pay)
 							npc_data.hunger = clampf(npc_data.hunger + 40.0, 0.0, 100.0)
-							npc_data.stamina = clampf(npc_data.stamina + 15.0, 0.0, 100.0)
+							npc_data.stamina = clampf(npc_data.stamina + 20.0, 0.0, 100.0)
 							npc_data.mood = clampf(npc_data.mood + 10.0, 0.0, 100.0)
 						npc_data.stats_changed.emit(npc_data.npc_id)
 				)
@@ -394,8 +490,6 @@ func _execute_action(action_id: int, target_poi: int) -> void:
 				show_bubble(2.5)
 				if npc_data:
 					npc_data.add_item("crops", 1)
-					npc_data.stamina = clampf(npc_data.stamina - 8.0, 0.0, 100.0)
-					npc_data.hunger = clampf(npc_data.hunger - 4.0, 0.0, 100.0)
 					npc_data.mood = clampf(npc_data.mood + 6.0, 0.0, 100.0)
 					npc_data.stats_changed.emit(npc_data.npc_id)
 			)
@@ -467,10 +561,7 @@ func _execute_work(job_id: int, poi: int) -> void:
 					npc_data.add_item("crops", 1)
 				8: # 商店店長 -> 販售營業
 					npc_data.add_item("money", 4)
-			# 執勤工作消耗體力與飽食度 (醫護人員享用院內員工餐免扣飽食度)
-			npc_data.stamina = clampf(npc_data.stamina - 10.0, 0.0, 100.0)
-			if job_id != 5:
-				npc_data.hunger = clampf(npc_data.hunger - 5.0, 0.0, 100.0)
+			# 執勤工作之生理消耗由 tick_update (STAMINA_DECAY_WORK) 與 STM 結算平滑推進，不再進行單次重度扣除
 			npc_data.stats_changed.emit(npc_data.npc_id)
 	)
 
@@ -481,7 +572,6 @@ func _execute_eat_in_place() -> void:
 		exit_building()
 	set_state(State.INTERACTING)
 	show_bubble(1.5)
-	await get_tree().create_timer(1.5).timeout
 	if npc_data:
 		var ate: bool = npc_data.eat_food(true)
 		if not ate:
@@ -502,7 +592,7 @@ func _execute_eat_in_place() -> void:
 		var t_str: String = g.get_formatted_time() if g else ""
 		npc_data.add_stm_event("%s 就地食用便當/糧食" % t_str)
 		npc_data.stats_changed.emit(npc_data.npc_id)
-	_complete_current_action()
+	_action_timer = 1.5
 
 
 ## 閒逛行為：隨機在附近可通行且未被佔用地塊漫遊
@@ -593,7 +683,7 @@ func _move_to_poi_and_act(poi_id: int, target_state: State, duration: float, on_
 			for cand in candidates:
 				if cand is Array and cand.size() >= 2:
 					var c := Vector2i(int(cand[0]), int(cand[1]))
-					if not _is_cell_occupied(c):
+					if nav.is_cell_walkable(c) and not _is_cell_occupied(c):
 						target_cell = c
 						break
 
@@ -614,6 +704,8 @@ func _move_to_poi_and_act(poi_id: int, target_state: State, duration: float, on_
 			set_state(target_state)
 			if is_concealed_poi:
 				enter_building(str(poi_data.get("entrance_dir", "south")))
+			if poi_id == 22 or poi_id == 20 or poi_id == 12:
+				_check_billboard_rumors(poi_id)
 			if on_arrive.is_valid():
 				on_arrive.call()
 			_action_timer = duration
@@ -623,10 +715,41 @@ func _move_to_poi_and_act(poi_id: int, target_state: State, duration: float, on_
 		set_state(target_state)
 		if poi_data.get("concealed", false):
 			enter_building(str(poi_data.get("entrance_dir", "south")))
+		if poi_id == 22 or poi_id == 20 or poi_id == 12:
+			_check_billboard_rumors(poi_id)
 		if on_arrive.is_valid():
 			on_arrive.call()
 		_action_timer = duration
 	)
+
+## 檢查並學習公佈欄上的新情報 (當 NPC 抵達專屬布告欄 POI 22 或 廣場/商店時)
+func _check_billboard_rumors(poi_id: int) -> void:
+	if npc_data == null or is_dead:
+		return
+	var g: Node = _get_global()
+	if g == null or not g.has_method("get_diffusion_manager"):
+		return
+	var diff_mgr = g.get_diffusion_manager()
+	if diff_mgr == null:
+		return
+
+	var billboard_rumors: Array[Dictionary] = diff_mgr.get_billboard_rumors()
+	for r in billboard_rumors:
+		var r_id: String = str(r.get("id", ""))
+		if not npc_data.has_rumor(r_id):
+			# 若專門前來布告欄 (POI 22) 則 100% 閱讀；若只是路過廣場/商店則 35% 機率駐足閱讀
+			var read_chance: float = 1.0 if (poi_id == 22) else 0.35
+			if randf() <= read_chance:
+				var cur_day: int = _get_current_day()
+				var cur_tick: int = _get_current_tick()
+				var s_name: String = npc_data.npc_name if not npc_data.npc_name.is_empty() else name
+				var ok: bool = npc_data.learn_rumor(r, "billboard", "小鎮布告欄", cur_day, cur_tick, 1)
+				if ok:
+					diff_mgr.record_spread(r_id, "billboard", "小鎮布告欄", npc_data.npc_id, s_name, cur_day, cur_tick, poi_id, 0)
+					show_speech_bubble("📋 閱覽布告欄公告...", 3.0)
+					# [保留接口] 未來切換不同氣泡 frame / 圖像時取消以下註解：
+					# set_bubble_frame(3) # 閱讀公佈欄氣泡
+					break
 
 
 ## 社交互動行為 (防重疊、獨立站位、距離防呆、互斥鎖定)
@@ -740,13 +863,18 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 		var cur_tick: int = _get_current_tick()
 		var cur_day: int = _get_current_day()
 
+		var s_fav_to_t: float = npc_data.get_friendship(other_npc.npc_data.npc_id)
+		var s_mood: float = npc_data.mood
 		var social_action: int = 1 # 預設普通聊天 (1~7)
-		if decision_service:
-			social_action = decision_service.decide_social_action(t_num, false)
+		# 優先採用 Social Transformer 端到端神經預測之動作
+		if _last_candidates_eval.has("predicted_action_id") and int(_last_candidates_eval.get("target_id", -1)) == t_num:
+			social_action = int(_last_candidates_eval["predicted_action_id"])
+		elif decision_service:
+			social_action = decision_service.decide_social_action(t_num, false, s_fav_to_t, s_mood)
 
 		var s_social: Dictionary = {
 			"trust_to_target": npc_data.get_trust(other_npc.npc_data.npc_id),
-			"fav_to_target": npc_data.get_friendship(other_npc.npc_data.npc_id)
+			"fav_to_target": s_fav_to_t
 		}
 		var t_social: Dictionary = {
 			"trust_to_source": other_npc.npc_data.get_trust(npc_data.npc_id),
@@ -770,6 +898,12 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 		var s_name: String = npc_data.npc_name if not npc_data.npc_name.is_empty() else name
 		var t_name: String = other_npc.npc_data.npc_name if not other_npc.npc_data.npc_name.is_empty() else other_npc.name
 		var time_str: String = "第 %d 天 %02d:%02d" % [cur_day, cur_tick / 60, cur_tick % 60]
+
+		var phase_str: String = "破冰期"
+		if s_fav_to_t >= 65.0:
+			phase_str = "好友深度交流"
+		elif s_fav_to_t < 35.0:
+			phase_str = "關係緊張/排斥"
 
 		var s_delta_fav: float = 0.0
 		var s_delta_trust: float = 0.0
@@ -800,7 +934,7 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 			other_npc.npc_data.social_desire = clampf(other_npc.npc_data.social_desire + 40.0, 0.0, 100.0)
 			other_npc.npc_data.record_interaction(npc_data.npc_id, cur_day)
 
-			print("[NPCController] %s 與 %s 展開社交 [%s]，記憶已寫入 STSM" % [npc_data.npc_id, other_npc.npc_data.npc_id, action_str])
+			print("[NPCController] %s 與 %s 展開社交 [%s] (%s)，記憶已寫入 STSM" % [npc_data.npc_id, other_npc.npc_data.npc_id, action_str, phase_str])
 		else:
 			# 備用純規則平緩調整
 			s_delta_fav = 3.0
@@ -827,6 +961,7 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 			"score": _last_evaluated_social_score,
 			"action_id": social_action,
 			"action_name": action_str,
+			"phase": phase_str,
 			"timestamp": time_str,
 			"is_initiator": true,
 			"history_score": s_history,
@@ -840,6 +975,7 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 			"score": _last_evaluated_social_score,
 			"action_id": social_action,
 			"action_name": action_str,
+			"phase": phase_str,
 			"timestamp": time_str,
 			"is_initiator": false,
 			"history_score": t_history,
@@ -852,8 +988,76 @@ func _start_mutual_conversation(other_npc: NPCController) -> void:
 		npc_data.add_stm_event("與 %s 互動: %s (好感%+0.1f/信任%+0.1f)" % [t_name, action_str, s_delta_fav, s_delta_trust])
 		other_npc.npc_data.add_stm_event("與 %s 互動: %s (好感%+0.1f/信任%+0.1f)" % [s_name, action_str, t_delta_fav, t_delta_trust])
 
+		# 寫入 Transformer 訓練軌跡 (Social Interaction Step)
+		if g and g.has_method("get_trajectory_logger"):
+			var logger = g.get_trajectory_logger()
+			if logger and logger.is_logging:
+				var radar_list: Array[Dictionary] = get_nearby_social_candidates()
+				var s_ch_dict: Dictionary = res.get("source", {"change_favorability": s_delta_fav, "change_trust": s_delta_trust, "change_mood": s_delta_mood})
+				var t_ch_dict: Dictionary = res.get("target", {"change_favorability": t_delta_fav, "change_trust": t_delta_trust, "change_mood": t_delta_mood})
+				logger.log_social_interaction_step(
+					self,
+					other_npc,
+					cur_tick,
+					cur_day,
+					social_action,
+					action_str,
+					phase_str,
+					s_ch_dict,
+					t_ch_dict,
+					radar_list
+				)
+
 		npc_data.stats_changed.emit(npc_data.npc_id)
 		other_npc.npc_data.stats_changed.emit(other_npc.npc_data.npc_id)
+
+		# ============================================================
+		# 訊息傳播與八卦情報擴散機制 (Information Diffusion Subsystem)
+		# 當社交行為為 7 (訊息傳播) 或 一般社交中隨機觸發 (機率 40%)
+		# ============================================================
+		var is_spreading_rumor: bool = (social_action == 7) or (randf() < 0.40)
+		if is_spreading_rumor and g and g.has_method("get_diffusion_manager"):
+			var diff_mgr = g.get_diffusion_manager()
+			if diff_mgr:
+				var cur_poi: int = int(last_decision.get("target_location", 0))
+				var unshared_by_s: Array[String] = npc_data.get_unshared_rumors_for(other_npc.npc_data.npc_id)
+				var unshared_by_t: Array[String] = other_npc.npc_data.get_unshared_rumors_for(npc_data.npc_id)
+				var transferred: bool = false
+
+				if not unshared_by_s.is_empty():
+					var r_id: String = unshared_by_s[randi() % unshared_by_s.size()]
+					var rumor: Dictionary = diff_mgr.get_rumor_by_id(r_id)
+					if not rumor.is_empty():
+						var s_gen: int = int(npc_data.known_rumors.get(r_id, {}).get("generation", 1))
+						var ok: bool = other_npc.npc_data.learn_rumor(rumor, npc_data.npc_id, s_name, cur_day, cur_tick, s_gen + 1)
+						if ok:
+							npc_data.mark_rumor_shared(r_id, other_npc.npc_data.npc_id)
+							diff_mgr.record_spread(r_id, npc_data.npc_id, s_name, other_npc.npc_data.npc_id, t_name, cur_day, cur_tick, cur_poi, s_gen)
+							# 雙向頭頂即時氣泡演繹
+							show_speech_bubble("🗣️ %s" % rumor.get("title", "分享情報"), 3.2)
+							other_npc.show_speech_bubble("👂 收到情報！", 3.2)
+							# [保留接口] 未來切換不同氣泡 frame / 圖像時取消以下註解：
+							# set_bubble_frame(1) # 說話者氣泡幀
+							# other_npc.set_bubble_frame(2) # 接收者氣泡幀
+							transferred = true
+				elif not unshared_by_t.is_empty():
+					var r_id: String = unshared_by_t[randi() % unshared_by_t.size()]
+					var rumor: Dictionary = diff_mgr.get_rumor_by_id(r_id)
+					if not rumor.is_empty():
+						var t_gen: int = int(other_npc.npc_data.known_rumors.get(r_id, {}).get("generation", 1))
+						var ok: bool = npc_data.learn_rumor(rumor, other_npc.npc_data.npc_id, t_name, cur_day, cur_tick, t_gen + 1)
+						if ok:
+							other_npc.npc_data.mark_rumor_shared(r_id, npc_data.npc_id)
+							diff_mgr.record_spread(r_id, other_npc.npc_data.npc_id, t_name, npc_data.npc_id, s_name, cur_day, cur_tick, cur_poi, t_gen)
+							other_npc.show_speech_bubble("🗣️ %s" % rumor.get("title", "分享情報"), 3.2)
+							show_speech_bubble("👂 收到情報！", 3.2)
+							# [保留接口] 未來切換不同氣泡 frame / 圖像時取消以下註解：
+							# other_npc.set_bubble_frame(1)
+							# set_bubble_frame(2)
+							transferred = true
+
+				if not transferred and social_action == 7:
+					show_speech_bubble("🗣️ 「城鎮最近似乎平平靜靜的...」", 2.5)
 
 	_action_memory_saved = true
 	other_npc._action_memory_saved = true
@@ -917,8 +1121,54 @@ func face_toward(target_pos: Vector2) -> void:
 ## 顯示對話氣泡
 func show_bubble(duration: float = 2.0) -> void:
 	if bubble_node:
+		var lbl: Label = bubble_node.get_node_or_null("bubble_text") as Label
+		if lbl:
+			lbl.text = ""
 		bubble_node.visible = true
-		if duration > 0.0:
+		if duration > 0.0 and get_tree():
+			var timer = get_tree().create_timer(duration)
+			timer.timeout.connect(func():
+				if is_instance_valid(bubble_node):
+					bubble_node.visible = false
+			)
+
+## 設定/切換頭頂氣泡的圖像 Frame (供後續自定義氣泡 Sprite2D / AnimatedSprite2D 圖集使用)
+func set_bubble_frame(frame_index: int) -> void:
+	# [保留接口] 未來使用者加入自定義氣泡圖集時，取消以下註解或客製邏輯：
+	# if bubble_node:
+	# 	if bubble_node is Sprite2D:
+	# 		(bubble_node as Sprite2D).frame = frame_index
+	# 	elif bubble_node is AnimatedSprite2D:
+	# 		(bubble_node as AnimatedSprite2D).frame = frame_index
+	# 	else:
+	# 		var spr = bubble_node.get_node_or_null("Sprite2D")
+	# 		if spr and "frame" in spr:
+	# 			spr.frame = frame_index
+	pass
+
+## 顯示帶有文字/Emoji之對話與告警氣泡
+func show_speech_bubble(text: String, duration: float = 2.5, bubble_frame: int = -1) -> void:
+	if bubble_node:
+		# [保留接口] 若有指定氣泡 frame，調用 set_bubble_frame 切換
+		# if bubble_frame >= 0:
+		# 	set_bubble_frame(bubble_frame)
+
+		var lbl: Label = bubble_node.get_node_or_null("bubble_text") as Label
+		if lbl == null:
+			lbl = Label.new()
+			lbl.name = "bubble_text"
+			lbl.position = Vector2(-36, -34)
+			lbl.size = Vector2(96, 20)
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			lbl.add_theme_font_size_override("font_size", 9)
+			lbl.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1, 1.0))
+			lbl.add_theme_color_override("font_outline_color", Color(1.0, 1.0, 1.0, 0.95))
+			lbl.add_theme_constant_override("outline_size", 3)
+			bubble_node.add_child(lbl)
+		lbl.text = text
+		bubble_node.visible = true
+		if duration > 0.0 and get_tree():
 			var timer = get_tree().create_timer(duration)
 			timer.timeout.connect(func():
 				if is_instance_valid(bubble_node):
@@ -972,10 +1222,16 @@ func move_along_grid(target_cell: Vector2i, on_complete: Callable = Callable()) 
 	var path: Array[Vector2i] = nav.get_id_path(start_cell, target_cell)
 
 	if path.size() <= 1:
-		# 無法尋得路徑或被阻擋
-		push_warning("[NPCController] %s 無法尋得由 %s 至 %s 之有效路徑。" % [name, str(start_cell), str(target_cell)])
-		_complete_current_action(false)
-		return
+		# 第一次尋路未成 (可能目標格臨時被障礙卡死)，嘗試探查目標地塊周邊最近可通行的備用格進行重試
+		var alt_target: Vector2i = nav.get_closest_walkable_cell(target_cell, 4)
+		if alt_target != Vector2i(-1, -1) and alt_target != target_cell:
+			path = nav.get_id_path(start_cell, alt_target)
+
+		if path.size() <= 1:
+			# 若仍無法尋得路徑或被阻擋
+			push_warning("[NPCController] %s 無法尋得由 %s 至 %s 之有效路徑。" % [name, str(start_cell), str(target_cell)])
+			_complete_current_action(false)
+			return
 
 	_current_path = path
 	set_state(State.MOVING)
@@ -1035,6 +1291,10 @@ func _step_move(step_index: int, on_complete: Callable) -> void:
 # 10. 內部私有輔助函式 (Internal Helpers)
 # ------------------------------------------------------------------------------
 
+## 判斷當前是否為夜間就寢時段 (23:00 ~ 06:00 / tick >= 1380 或 tick < 360)
+func _is_bedtime_hour(tick: int) -> bool:
+	return tick >= 1380 or tick < 360
+
 func _on_action_timer_finished() -> void:
 	_complete_current_action(true)
 
@@ -1048,15 +1308,81 @@ func _complete_current_action(is_success: bool = true) -> void:
 		_action_memory_saved = true
 
 	_is_executing_action = false
+	_action_elapsed_ticks = 0
 	is_social_target = false
+	_social_target_elapsed_ticks = 0
 	if is_instance_valid(_current_social_partner):
 		var partner: NPCController = _current_social_partner
 		_current_social_partner = null
 		partner.is_social_target = false
+		partner._social_target_elapsed_ticks = 0
 		partner._current_social_partner = null
 		partner._complete_current_action(is_success)
 	action_completed.emit(current_action_id)
+
+	# 若為夜間就寢行動且當前仍處於夜間就寢時段，保持 State.RESTING 狀態安穩就寢，直到晨起 06:00
+	var cur_tick: int = _get_current_tick()
+	if current_action_id == 5 and _is_bedtime_hour(cur_tick):
+		set_state(State.RESTING)
+		return
+
 	set_state(State.IDLE)
+
+## 強制中止目前超時或卡住的行動並恢復為 IDLE 狀態
+func _abort_and_reset_action() -> void:
+	if _move_tween and _move_tween.is_valid():
+		_move_tween.kill()
+	_current_path.clear()
+	_action_timer = 0.0
+	_action_elapsed_ticks = 0
+	_social_target_elapsed_ticks = 0
+	is_social_target = false
+	_pending_step_index = -1
+	_pending_on_complete = Callable()
+
+	if is_instance_valid(_current_social_partner):
+		var partner: NPCController = _current_social_partner
+		_current_social_partner = null
+		partner.is_social_target = false
+		partner._social_target_elapsed_ticks = 0
+		partner._current_social_partner = null
+		if partner._is_executing_action:
+			partner._complete_current_action(false)
+
+	_complete_current_action(false)
+	set_state(State.IDLE)
+
+## 響應飢餓瀕臨危急訊號 (hunger < 20.0)
+func _on_hunger_critical(_id: String = "") -> void:
+	if not is_dead and current_action_id != 3:
+		_handle_emergency_starvation(_get_current_tick())
+
+## 緊急飢餓求生自救處理 (Emergency Survival Interrupt)
+func _handle_emergency_starvation(current_tick: int) -> void:
+	if is_dead or npc_data == null:
+		return
+
+	# 先中止目前進行中之任何常規或社交行為
+	if _is_executing_action or current_state == State.MOVING:
+		_abort_and_reset_action()
+
+	print("[NPCController] ⚠️ %s 觸發瀕死飢餓緊急自救！(飢餓值: %.1f)" % [npc_data.npc_id, npc_data.hunger])
+
+	current_action_id = 3 # 用餐
+	_is_executing_action = true
+	_action_elapsed_ticks = 0
+	_action_memory_saved = false
+	action_started.emit(3, "緊急進食", 13)
+
+	# 若身上有便當/食物，或是手頭有農作物/生鮮，原地立即食用
+	if npc_data.lunchbox > 0 or npc_data.food > 0 or npc_data.crops > 0 or npc_data.fish > 0:
+		_execute_eat_in_place()
+	elif npc_data.money >= 3:
+		# 有錢則火速前往餐廳 (POI 13)
+		_execute_action(3, 13)
+	else:
+		# 既無儲糧亦無金錢，原地摘野果/飲水應急充飢，保證生存底線
+		_execute_eat_in_place()
 
 ## 依據圖 2：計算一般行動數值增減並儲存至 STM
 func _save_normal_action_memory(action_id: int, is_success: bool) -> void:
@@ -1091,6 +1417,12 @@ func _save_normal_action_memory(action_id: int, is_success: bool) -> void:
 		var act_name: String = decision_service.get_action_name(action_id)
 		var r_val: float = float(res.get("reward_value", 0.0))
 		print("[NPCController] %s 完成行動 [%s] (成功=%s)，數值已更新並存入 STM (Reward: %.2f)" % [npc_data.npc_id, act_name, str(is_success), r_val])
+
+		# 寫入 Transformer 訓練軌跡 (Normal Decision Step)
+		if g and g.has_method("get_trajectory_logger"):
+			var logger = g.get_trajectory_logger()
+			if logger and logger.is_logging:
+				logger.log_normal_action_step(npc_data, cur_tick, _get_current_day(), last_decision, res)
 
 func _get_current_tick() -> int:
 	var g: Node = _get_global()
@@ -1183,12 +1515,14 @@ func _find_available_partner() -> NPCController:
 	if candidates.is_empty():
 		return null
 
-	# 若 C# ONNX 社交推論引擎可用，呼叫 7 維神經網路批次推論與加權輪盤
+	# 若 C# ONNX 社交推論引擎可用，呼叫 Social Transformer (或社交 MLP) 批次推論與加權輪盤
 	if decision_service and decision_service.is_social_engine_available():
 		var cur_tick: float = float(g.current_tick) if "current_tick" in g else 720.0
 		var s_desire: float = npc_data.social_desire if npc_data else 50.0
 		var s_mood: float = npc_data.mood if npc_data else 50.0
-		var eval_res: Dictionary = decision_service.evaluate_social_candidates(cur_tick, s_desire, s_mood, candidates)
+		var s_stamina: float = npc_data.stamina if npc_data else 50.0
+		var s_job: int = npc_data.job_id if npc_data else 9
+		var eval_res: Dictionary = decision_service.evaluate_social_candidates(cur_tick, s_desire, s_mood, candidates, s_stamina, s_job)
 		_last_candidates_eval = eval_res
 		var chosen_id: int = int(eval_res.get("target_id", -1))
 		if chosen_id > 0 and candidate_ctrls.has(chosen_id):
@@ -1252,20 +1586,37 @@ func get_nearby_social_candidates() -> Array[Dictionary]:
 		var s_mood: float = npc_data.mood if npc_data else 50.0
 		var eval_res: Dictionary = decision_service.evaluate_social_candidates(cur_tick, s_desire, s_mood, candidates)
 		var c_scores: Dictionary = eval_res.get("candidate_scores", {})
+		var c_probs: Dictionary = eval_res.get("candidate_probs", {})
+		var highest_id: int = int(eval_res.get("highest_target_id", -1))
 		for cand in candidates:
 			var cid: int = int(cand["id"])
 			if c_scores.has(cid):
 				cand["score"] = float(c_scores[cid])
+			if c_probs.has(cid):
+				cand["prob"] = float(c_probs[cid])
+			else:
+				cand["prob"] = 0.0
+			cand["is_top"] = (cid == highest_id)
 	else:
+		var total_pow: float = 0.0
 		for cand in candidates:
 			var f_ratio: float = float(cand["favorability"]) / 100.0
 			var d_ratio: float = 1.0 - (float(cand["distance"]) / 32.0)
-			cand["score"] = clampf(f_ratio * 0.7 + d_ratio * 0.3, 0.0, 1.0)
+			var sc: float = clampf(f_ratio * 0.7 + d_ratio * 0.3, 0.0, 1.0)
+			cand["score"] = sc
+			var pw: float = sc * sc * sc
+			cand["_pw"] = pw
+			total_pow += pw
+		for cand in candidates:
+			cand["prob"] = (cand["_pw"] / total_pow) if total_pow > 0.0 else 0.0
+			cand["is_top"] = false
 
 	var typed_candidates: Array[Dictionary] = []
 	for c in candidates:
 		typed_candidates.append(c as Dictionary)
 	typed_candidates.sort_custom(func(a, b): return a["score"] > b["score"])
+	if not typed_candidates.is_empty():
+		typed_candidates[0]["is_top"] = true
 	return typed_candidates
 
 ## 檢查特定網格地塊是否已被任何非隱蔽且活著的 NPC 佔用
@@ -1316,18 +1667,229 @@ func _get_free_adjacent_cell(center_cell: Vector2i) -> Vector2i:
 
 ## 響應生命值歸零 (飢餓衰竭或體力耗盡)
 func _on_hp_depleted(_id: String = "") -> void:
-	if not is_dead:
+	if not is_dead and not is_fainted:
 		var cause_str: String = "飢餓衰竭" if (npc_data and npc_data.hunger <= 0.0) else "體力耗盡"
-		die(cause_str)
+		faint(cause_str)
+
+## 觸發昏厥倒地 (暫不直接死亡，等待路人通報與醫生外勤救援)
+func faint(cause: String = "體力竭盡昏厥") -> void:
+	if is_fainted or is_dead:
+		return
+	is_fainted = true
+	fainted_cause = cause
+	fainted_elapsed_ticks = 0
+	_is_executing_action = false
+	_action_timer = 0.0
+	_action_elapsed_ticks = 0
+	_social_target_elapsed_ticks = 0
+
+	if _move_tween and _move_tween.is_valid():
+		_move_tween.kill()
+
+	if is_concealed:
+		exit_building()
+
+	# 倒地展演：旋轉 90 度倒下，面色蒼白
+	if animated_sprite:
+		animated_sprite.stop()
+		var faint_tween: Tween = create_tween().set_parallel(true)
+		faint_tween.tween_property(animated_sprite, "rotation_degrees", 90.0, 0.4)
+		faint_tween.tween_property(animated_sprite, "modulate", Color(0.7, 0.75, 0.85, 0.95), 0.4)
+
+	set_state(State.RESTING)
+	show_speech_bubble("💫 昏迷倒地！", 3.0)
+
+	var g: Node = _get_global()
+	if g and g.has_method("on_npc_fainted"):
+		g.on_npc_fainted(npc_data.npc_id if npc_data else name, fainted_cause)
+	print("[NPCController] 💫 %s 因【%s】昏厥倒地 (座標: %s)！" % [
+		npc_data.npc_name if npc_data else name, fainted_cause, str(global_position)
+	])
+
+## 從昏迷中被醫生施救喚醒
+func wake_up_from_faint(doctor_name: String, doctor_id: String = "") -> void:
+	if not is_fainted:
+		return
+	is_fainted = false
+	fainted_cause = ""
+	fainted_elapsed_ticks = 0
+
+	# 角色回正展演
+	if animated_sprite:
+		var t: Tween = create_tween().set_parallel(true)
+		t.tween_property(animated_sprite, "rotation_degrees", 0.0, 0.4)
+		t.tween_property(animated_sprite, "modulate", Color.WHITE, 0.4)
+
+	if npc_data:
+		npc_data.hp = 60.0
+		npc_data.health = clampf(maxf(npc_data.health, 45.0), 0.0, 100.0)
+		npc_data.stamina = clampf(maxf(npc_data.stamina, 45.0), 0.0, 100.0)
+		npc_data.hunger = clampf(maxf(npc_data.hunger, 35.0), 0.0, 100.0)
+		npc_data.mood = clampf(npc_data.mood + 25.0, 0.0, 100.0)
+		if not doctor_id.is_empty():
+			npc_data.modify_relationship(doctor_id, 35.0, 45.0)
+		npc_data.add_stm_event("被 %s 施救喚醒，重獲新生！" % doctor_name)
+		npc_data.stats_changed.emit(npc_data.npc_id)
+
+	show_speech_bubble("❤️ 感謝 %s 救了我！" % doctor_name, 3.5)
+	set_state(State.IDLE)
+
+	var g: Node = _get_global()
+	if g and g.has_method("on_npc_revived"):
+		g.on_npc_revived(npc_data.npc_id if npc_data else name, doctor_id)
+
+## 測試/除錯：主動讓此 NPC 進入昏厥狀態，驗證路人通報與醫生出診救援閉環
+func trigger_test_faint(reason: String = "中暑體力透支") -> void:
+	faint(reason)
+
+## 路人自主發現並通報周遭昏厥市民
+func _check_and_report_nearby_emergencies() -> void:
+	var g = _get_global()
+	if g == null:
+		return
+	var all_npcs = g.get_all_npcs()
+	for other: Node2D in all_npcs:
+		if other != self and is_instance_valid(other):
+			if bool(other.get("is_fainted")) == true and not bool(other.get("is_dead")) and not bool(other.get("is_concealed")):
+				var dist: float = global_position.distance_to(other.global_position)
+				if dist <= 180.0: # 視野範圍約 11 格以內
+					var patient_id: String = other.npc_data.npc_id if other.get("npc_data") else other.name
+					if not g.is_emergency_active(patient_id):
+						# 發現倒地者，面向目標並通報
+						face_toward(other.global_position)
+						show_speech_bubble("🚨 發現有人昏倒！已呼叫急救！", 3.0)
+						var nav = _get_nav_manager()
+						var p_cell: Vector2i = nav.local_to_map(other.global_position) if nav else Vector2i.ZERO
+						var my_id: String = npc_data.npc_id if npc_data else name
+						g.report_medical_emergency(patient_id, other.global_position, p_cell, my_id)
+						print("[NPCController] 🚨 %s 發現昏厥的 %s，已向全域通報急救！" % [my_id, patient_id])
+						break
+
+## 檢查醫護人員當前是否處於值班時間
+func _is_doctor_on_duty(tick: int) -> bool:
+	if npc_data == null or npc_data.job_id != 5:
+		return false
+	# Ivy (npc_09): 早班 07:00 ~ 15:00 (420 ~ 900)
+	# Jack (npc_10): 晚班 14:00 ~ 22:00 (840 ~ 1320)
+	var is_late_shift: bool = (npc_data.npc_id == "npc_10" or npc_data.home_poi_id == 9)
+	var s_start: int = 840 if is_late_shift else 420
+	var s_end: int = 1320 if is_late_shift else 900
+	return tick >= s_start and tick < s_end
+
+## 醫護人員執勤檢查：若醫院無病患且全域存在未處理之昏迷市民，自主出診救援
+func _check_doctor_rescue_duty(tick: int) -> void:
+	if not _is_doctor_on_duty(tick):
+		return
+	var g = _get_global()
+	if g == null:
+		return
+	# 條件 1: 醫院當前無病患 (醫院沒人)
+	if g.is_hospital_busy():
+		return
+	# 條件 2: 存在待救援之緊急事件
+	if not g.has_pending_emergency():
+		return
+
+	var my_id: String = npc_data.npc_id if npc_data else name
+	var emergency: Dictionary = g.get_pending_emergency(my_id)
+	if emergency.is_empty():
+		return
+
+	# 接單出診救援
+	_dispatch_doctor_rescue(emergency)
+
+## 啟動外勤出診急救流程
+func _dispatch_doctor_rescue(emergency: Dictionary) -> void:
+	var g = _get_global()
+	var my_id: String = npc_data.npc_id if npc_data else name
+	var patient_id: String = String(emergency.get("patient_id", ""))
+	if g:
+		g.assign_doctor_to_emergency(patient_id, my_id)
+
+	is_rescuing = true
+	_current_rescue_emergency = emergency
+	_abort_and_reset_action()
+	if is_concealed:
+		exit_building()
+
+	show_speech_bubble("🚑 收到急救通報！立刻出診救援！", 3.0)
+	var target_cell: Vector2i = Vector2i.ZERO
+	if emergency.has("location_cell") and emergency["location_cell"] is Array and emergency["location_cell"].size() >= 2:
+		target_cell = Vector2i(int(emergency["location_cell"][0]), int(emergency["location_cell"][1]))
+	elif emergency.has("location_cell") and emergency["location_cell"] is Vector2i:
+		target_cell = emergency["location_cell"]
+
+	var nav = _get_nav_manager()
+	var dest_cell: Vector2i = target_cell
+	if nav:
+		dest_cell = _get_free_adjacent_cell(target_cell)
+
+	move_along_grid(dest_cell, Callable(self, "_on_reached_emergency_patient"))
+
+## 抵達倒地病患身邊並實施急救
+func _on_reached_emergency_patient() -> void:
+	if not is_rescuing:
+		return
+	var g = _get_global()
+	if g == null:
+		_finish_doctor_rescue()
+		return
+
+	var patient_id: String = String(_current_rescue_emergency.get("patient_id", ""))
+	var patient: Node2D = g.get_npc(patient_id)
+	if patient and is_instance_valid(patient) and bool(patient.get("is_fainted")) == true:
+		face_toward(patient.global_position)
+		set_state(State.INTERACTING)
+		show_speech_bubble("💉 正在實施急救復甦...", 2.5)
+
+		var timer = get_tree().create_timer(2.2)
+		timer.timeout.connect(func():
+			if is_instance_valid(patient) and bool(patient.get("is_fainted")) == true:
+				var doc_name: String = npc_data.npc_name if npc_data else "醫生"
+				var doc_id: String = npc_data.npc_id if npc_data else name
+				if patient.has_method("wake_up_from_faint"):
+					patient.wake_up_from_faint(doc_name, doc_id)
+				g.resolve_medical_emergency(patient_id, doc_id)
+
+				if npc_data:
+					npc_data.mood = clampf(npc_data.mood + 30.0, 0.0, 100.0)
+					npc_data.add_item("money", 6)
+					npc_data.add_stm_event("出診成功救醒倒地的 %s" % (patient.npc_data.npc_name if patient.get("npc_data") else patient_id))
+					npc_data.stats_changed.emit(npc_data.npc_id)
+
+				show_speech_bubble("✨ 急救成功！病患已甦醒脫險。", 2.5)
+
+			_finish_doctor_rescue()
+		)
+	else:
+		_finish_doctor_rescue()
+
+## 結束急救並返回醫院崗位
+func _finish_doctor_rescue() -> void:
+	is_rescuing = false
+	_current_rescue_emergency.clear()
+	var g = _get_global()
+	if g and g.has_poi(18):
+		var hosp_cell: Vector2i = g.get_poi_cell(18)
+		if hosp_cell != Vector2i(-1, -1):
+			show_speech_bubble("🏥 返院值班中...", 2.0)
+			move_along_grid(hosp_cell, func():
+				set_state(State.WORKING)
+			)
+			return
+	set_state(State.IDLE)
 
 ## 執行 NPC 死亡邏輯
 func die(cause: String = "飢餓衰竭") -> void:
 	if is_dead:
 		return
 	is_dead = true
+	is_fainted = false
 	death_cause = cause
 	_is_executing_action = false
 	_action_timer = 0.0
+	_action_elapsed_ticks = 0
+	_social_target_elapsed_ticks = 0
 
 	if _move_tween and _move_tween.is_valid():
 		_move_tween.kill()
@@ -1346,8 +1908,15 @@ func die(cause: String = "飢餓衰竭") -> void:
 	set_state(State.RESTING)
 
 	var g: Node = _get_global()
-	if g and g.has_method("on_npc_died"):
-		g.on_npc_died(npc_data.npc_id if npc_data else name, death_cause)
+	if g:
+		# 寫入 Transformer 訓練軌跡 (Death Step) 終端負向樣本
+		if g.has_method("get_trajectory_logger"):
+			var logger = g.get_trajectory_logger()
+			if logger and logger.is_logging:
+				logger.log_death_step(self, _get_current_tick(), _get_current_day(), death_cause)
+
+		if g.has_method("on_npc_died"):
+			g.on_npc_died(npc_data.npc_id if npc_data else name, death_cause)
 
 func _vector_to_direction(dir: Vector2) -> String:
 	if abs(dir.x) > abs(dir.y):
@@ -1359,6 +1928,10 @@ func _vector_to_direction(dir: Vector2) -> String:
 func get_state_name() -> String:
 	if is_dead:
 		return "💀 亡故"
+	if is_fainted:
+		return "💫 昏厥倒地 (%s)" % fainted_cause
+	if is_rescuing:
+		return "🚑 出診急救中"
 	match current_state:
 		State.IDLE: return "待機"
 		State.MOVING: return "移動中"
@@ -1385,6 +1958,10 @@ func to_dict() -> Dictionary:
 		"is_concealed": is_concealed,
 		"is_dead": is_dead,
 		"death_cause": death_cause,
+		"is_fainted": is_fainted,
+		"fainted_cause": fainted_cause,
+		"fainted_elapsed_ticks": fainted_elapsed_ticks,
+		"is_rescuing": is_rescuing,
 		"npc_data": npc_data.to_dict() if npc_data else {}
 	}
 
@@ -1416,11 +1993,21 @@ func from_dict(data: Dictionary) -> void:
 	else:
 		is_dead = false
 		death_cause = ""
-		if animated_sprite:
-			animated_sprite.rotation_degrees = 0.0
-			animated_sprite.modulate = Color.WHITE
-		var saved_state: int = int(data.get("current_state", State.IDLE))
-		set_state(saved_state as State)
+		is_fainted = bool(data.get("is_fainted", false))
+		fainted_cause = str(data.get("fainted_cause", ""))
+		fainted_elapsed_ticks = int(data.get("fainted_elapsed_ticks", 0))
+		is_rescuing = bool(data.get("is_rescuing", false))
+		if is_fainted:
+			if animated_sprite:
+				animated_sprite.rotation_degrees = 90.0
+				animated_sprite.modulate = Color(0.7, 0.75, 0.85, 0.95)
+			set_state(State.RESTING)
+		else:
+			if animated_sprite:
+				animated_sprite.rotation_degrees = 0.0
+				animated_sprite.modulate = Color.WHITE
+			var saved_state: int = int(data.get("current_state", State.IDLE))
+			set_state(saved_state as State)
 
 ## 初始化滑鼠點擊感應區域 (動態加入 Area2D，無需編輯 .tscn)
 func _setup_click_detection() -> void:

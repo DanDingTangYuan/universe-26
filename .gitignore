@@ -1,3 +1,33 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Operating System & IDE junk
+.DS_Store
+Thumbs.db
+*.tmp
+.vs/
+.vscode/
+.idea/
+
+# .NET / C# Build Artifacts
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosv
+
+# Native / Compiled Binaries (managed by NuGet or engine build)
+*.dylib
+*.so
+*.dll
+
+# Simulation Trajectory Logs & Runtime Caches (Very Large: ~2.6GB)
+data/trajectories/*
+!data/trajectories/.gitkeep
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Export Presets (contains local machine absolute paths/credentials)
+export_presets.cfg

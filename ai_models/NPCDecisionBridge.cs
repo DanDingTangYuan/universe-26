@@ -9,11 +9,17 @@ public partial class NPCDecisionBridge : RefCounted
 {
     private NPCDecision? _decision;
     private NPCSocialDecision? _socialDecision;
+    private NPCTransformerDecision? _transformerDecision;
+    private NPCSocialTransformerDecision? _socialTransformerDecision;
     private bool _isInitialized = false;
     private bool _isSocialInitialized = false;
+    private bool _isTransformerInitialized = false;
+    private bool _isSocialTransformerInitialized = false;
 
     public bool IsInitialized => _isInitialized;
     public bool IsSocialInitialized => _isSocialInitialized;
+    public bool IsTransformerInitialized => _isTransformerInitialized;
+    public bool IsSocialTransformerInitialized => _isSocialTransformerInitialized;
 
     /// <summary>
     /// 無參數初始化 (使用預設模型路徑)
@@ -42,7 +48,7 @@ public partial class NPCDecisionBridge : RefCounted
     }
 
     /// <summary>
-    /// 完整初始化一般決策與社交互動模型
+    /// 完整初始化一般決策與社交互動模型 (4 個參數)
     /// </summary>
     public bool Initialize(
         string onnxPath,
@@ -53,13 +59,10 @@ public partial class NPCDecisionBridge : RefCounted
         bool generalOk = false;
         try
         {
-            string globalOnnx = ProjectSettings.GlobalizePath(onnxPath);
-            string globalNorm = ProjectSettings.GlobalizePath(normalizationPath);
-
-            _decision = new NPCDecision(globalOnnx, globalNorm);
+            _decision = new NPCDecision(onnxPath, normalizationPath);
             _isInitialized = true;
             generalOk = true;
-            GD.Print($"[NPCDecisionBridge] 成功初始化一般決策 C# ONNX Runtime: {globalOnnx}");
+            GD.Print($"[NPCDecisionBridge] 成功初始化一般決策 C# ONNX Runtime: {onnxPath}");
         }
         catch (Exception ex)
         {
@@ -68,12 +71,26 @@ public partial class NPCDecisionBridge : RefCounted
         }
 
         // 嘗試自動初始化社交模型
-        if (FileAccess.FileExists(socialOnnxPath) && FileAccess.FileExists(socialNormPath))
+        if (Universe26.ModelResourceLoader.Exists(socialOnnxPath) && Universe26.ModelResourceLoader.Exists(socialNormPath))
         {
             InitializeSocial(socialOnnxPath, socialNormPath);
         }
 
-        return generalOk;
+        // 嘗試自動初始化 Transformer 決策大腦
+        string defaultTransformerPath = "res://ai_models/universe_policy_transformer.onnx";
+        if (Universe26.ModelResourceLoader.Exists(defaultTransformerPath))
+        {
+            InitializeTransformer(defaultTransformerPath);
+        }
+
+        // 嘗試自動初始化 Social Transformer 決策大腦
+        string defaultSocialTransformerPath = "res://ai_models/universe_social_transformer.onnx";
+        if (Universe26.ModelResourceLoader.Exists(defaultSocialTransformerPath))
+        {
+            InitializeSocialTransformer(defaultSocialTransformerPath);
+        }
+
+        return generalOk || _isTransformerInitialized || _isSocialTransformerInitialized;
     }
 
     /// <summary>
@@ -94,19 +111,88 @@ public partial class NPCDecisionBridge : RefCounted
     {
         try
         {
-            string globalSocialOnnx = ProjectSettings.GlobalizePath(socialOnnxPath);
-            string globalSocialNorm = ProjectSettings.GlobalizePath(socialNormPath);
-
             _socialDecision?.Dispose();
-            _socialDecision = new NPCSocialDecision(globalSocialOnnx, globalSocialNorm);
+            _socialDecision = new NPCSocialDecision(socialOnnxPath, socialNormPath);
             _isSocialInitialized = true;
-            GD.Print($"[NPCDecisionBridge] 成功初始化社交決策 C# ONNX Runtime: {globalSocialOnnx}");
+            GD.Print($"[NPCDecisionBridge] 成功初始化社交決策 C# ONNX Runtime: {socialOnnxPath}");
             return true;
         }
         catch (Exception ex)
         {
             GD.PrintErr($"[NPCDecisionBridge] 初始化社交決策 C# ONNX Runtime 失敗: {ex.Message}");
             _isSocialInitialized = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 查詢 Transformer 決策大腦是否啟用
+    /// </summary>
+    public bool IsTransformerActive()
+    {
+        return _isTransformerInitialized;
+    }
+
+    /// <summary>
+    /// 初始化 Causal Transformer 決策模型 (支援選填路徑)
+    /// </summary>
+    public bool InitializeTransformer(string onnxPath = "res://ai_models/universe_policy_transformer.onnx")
+    {
+        try
+        {
+            if (!Universe26.ModelResourceLoader.Exists(onnxPath))
+            {
+                GD.PrintErr($"[NPCDecisionBridge] Transformer ONNX 模型檔案不存在: {onnxPath}");
+                _isTransformerInitialized = false;
+                return false;
+            }
+
+            _transformerDecision?.Dispose();
+            _transformerDecision = new NPCTransformerDecision(onnxPath);
+            _isTransformerInitialized = true;
+            GD.Print($"[NPCDecisionBridge] 成功初始化 Transformer 決策大腦 C# ONNX Runtime: {onnxPath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] 初始化 Transformer 決策大腦 C# ONNX Runtime 失敗: {ex.Message}");
+            _isTransformerInitialized = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 查詢 Social Transformer 決策大腦是否啟用
+    /// </summary>
+    public bool IsSocialTransformerActive()
+    {
+        return _isSocialTransformerInitialized;
+    }
+
+    /// <summary>
+    /// 初始化 Causal Social Transformer 決策模型 (支援選填路徑)
+    /// </summary>
+    public bool InitializeSocialTransformer(string onnxPath = "res://ai_models/universe_social_transformer.onnx")
+    {
+        try
+        {
+            if (!Universe26.ModelResourceLoader.Exists(onnxPath))
+            {
+                GD.PrintErr($"[NPCDecisionBridge] Social Transformer ONNX 模型檔案不存在: {onnxPath}");
+                _isSocialTransformerInitialized = false;
+                return false;
+            }
+
+            _socialTransformerDecision?.Dispose();
+            _socialTransformerDecision = new NPCSocialTransformerDecision(onnxPath);
+            _isSocialTransformerInitialized = true;
+            GD.Print($"[NPCDecisionBridge] 🚀 成功初始化 Social Transformer 決策大腦 C# ONNX Runtime: {onnxPath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] 初始化 Social Transformer 決策大腦失敗: {ex.Message}");
+            _isSocialTransformerInitialized = false;
             return false;
         }
     }
@@ -174,6 +260,66 @@ public partial class NPCDecisionBridge : RefCounted
     }
 
     // =========================================================================
+    // 1.5. Causal Transformer 決策大腦 API (Transformer Decision APIs)
+    // =========================================================================
+
+    /// <summary>
+    /// 使用 Causal Transformer 評估下一步行為與目標地點 (端到端雙頭輸出)
+    /// </summary>
+    /// <param name="stats">15 維度特徵向量 (對應 NPCData.to_feature_vector)</param>
+    /// <param name="tick">當前遊戲 Tick (0~1440)</param>
+    /// <param name="jobId">職業 ID (1~9)</param>
+    /// <param name="homePoi">自宅 POI (0~25)</param>
+    /// <param name="prevAction">上一時間步行為代碼 (0~8)</param>
+    /// <returns>Godot Dictionary，包含 success, best_action, best_poi, action_scores, poi_scores</returns>
+    public Godot.Collections.Dictionary EvaluateTransformer(
+        float[] stats,
+        int tick,
+        int jobId,
+        int homePoi,
+        int prevAction)
+    {
+        var result = new Godot.Collections.Dictionary();
+        if (!_isTransformerInitialized || _transformerDecision == null)
+        {
+            GD.PrintErr("[NPCDecisionBridge] EvaluateTransformer 失敗: Transformer 模型尚未初始化");
+            result["success"] = false;
+            result["best_action"] = 0;
+            result["best_poi"] = 0;
+            result["action_scores"] = new Godot.Collections.Array<float>();
+            result["poi_scores"] = new Godot.Collections.Array<float>();
+            return result;
+        }
+
+        try
+        {
+            var res = _transformerDecision.EvaluateStep(stats, tick, jobId, homePoi, prevAction);
+            var actionArr = new Godot.Collections.Array<float>();
+            foreach (var a in res.ActionScores) actionArr.Add(a);
+
+            var poiArr = new Godot.Collections.Array<float>();
+            foreach (var p in res.PoiScores) poiArr.Add(p);
+
+            result["success"] = true;
+            result["best_action"] = res.BestAction;
+            result["best_poi"] = res.BestPoi;
+            result["action_scores"] = actionArr;
+            result["poi_scores"] = poiArr;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] EvaluateTransformer 推論異常: {ex.Message}");
+            result["success"] = false;
+            result["best_action"] = 0;
+            result["best_poi"] = 0;
+            result["action_scores"] = new Godot.Collections.Array<float>();
+            result["poi_scores"] = new Godot.Collections.Array<float>();
+        }
+
+        return result;
+    }
+
+    // =========================================================================
     // 2. 社交互動決策 API (Social Decision APIs)
     // =========================================================================
 
@@ -211,8 +357,16 @@ public partial class NPCDecisionBridge : RefCounted
         float time,
         float socialDesire,
         float mood,
-        Godot.Collections.Array candidates)
+        Godot.Collections.Array candidates,
+        float stamina = 50.0f,
+        int initiatorJobId = 9)
     {
+        // 優先使用 Causal Social Transformer 端到端推論
+        if (_isSocialTransformerInitialized && _socialTransformerDecision != null)
+        {
+            return _socialTransformerDecision.Evaluate(time, socialDesire, mood, stamina, initiatorJobId, candidates);
+        }
+
         var result = new Godot.Collections.Dictionary
         {
             { "target_id", -1 },
@@ -269,22 +423,49 @@ public partial class NPCDecisionBridge : RefCounted
 
         result["candidate_scores"] = candidateScores;
         result["highest_target_id"] = highestId;
+        result["highest_score"] = highestScore > 0f ? highestScore : 0.0f;
 
         if (validCandidates.Count == 0 || totalScore <= 0f)
         {
+            result["candidate_probs"] = new Godot.Collections.Dictionary();
             return result;
         }
 
-        // 加權輪盤隨機抽樣 (Roulette Wheel Selection)
-        double randomVal = Random.Shared.NextDouble() * totalScore;
-        double cumulative = 0.0;
-        int selectedTargetId = validCandidates[^1].id;
-        float selectedScore = validCandidates[^1].score;
-
+        // 指數立方放大權重抽樣 (Power-3 Exponential Roulette Wheel Selection)
+        // 強化 Top 1 首選權重，大幅提升決策信噪比與因果性，產出高質量 Transformer 訓練資料
+        var expCandidates = new List<(int id, float rawScore, double expWeight)>();
+        double totalExpWeight = 0.0;
         foreach (var (id, score) in validCandidates)
         {
-            cumulative += score;
-            if (randomVal < cumulative)
+            double w = Math.Pow(score, 3.0);
+            expCandidates.Add((id, score, w));
+            totalExpWeight += w;
+        }
+
+        var candidateProbs = new Godot.Collections.Dictionary();
+        foreach (var (id, score, w) in expCandidates)
+        {
+            float prob = totalExpWeight > 0.0 ? (float)(w / totalExpWeight) : 0f;
+            candidateProbs[id] = prob;
+        }
+        result["candidate_probs"] = candidateProbs;
+
+        if (totalExpWeight <= 0.0)
+        {
+            result["target_id"] = highestId;
+            result["score"] = highestScore;
+            return result;
+        }
+
+        double randomVal = Random.Shared.NextDouble() * totalExpWeight;
+        double cumulative = 0.0;
+        int selectedTargetId = expCandidates[^1].id;
+        float selectedScore = expCandidates[^1].rawScore;
+
+        foreach (var (id, score, w) in expCandidates)
+        {
+            cumulative += w;
+            if (randomVal <= cumulative)
             {
                 selectedTargetId = id;
                 selectedScore = score;
@@ -299,27 +480,43 @@ public partial class NPCDecisionBridge : RefCounted
     }
 
     /// <summary>
-    /// 決定具體社交行為代碼 (1~7)
+    /// 決定具體社交行為代碼 (1~7，相容舊版單參數)
     /// </summary>
     public int DecideSocialAction(int targetId)
     {
-        return NPCSocialDecision.DecideSocialAction(targetId, false);
+        return NPCSocialDecision.DecideSocialAction(targetId, false, 50f, 50f);
     }
 
     /// <summary>
-    /// 決定具體社交行為代碼 (1~7)，可指定是否持有可傳播訊息
+    /// 決定具體社交行為代碼 (1~7，相容舊版雙參數)
     /// </summary>
     public int DecideSocialAction(int targetId, bool hasSpreadMessage)
     {
-        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage);
+        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage, 50f, 50f);
     }
 
     /// <summary>
-    /// 決定具體社交行為代碼 (1~7)，可指定是否持有可傳播訊息 (具名相容方法)
+    /// 決定具體社交行為代碼 (1~7，啟發式完整參數：目標、好感度、心情、訊息傳播)
+    /// </summary>
+    public int DecideSocialAction(int targetId, bool hasSpreadMessage, float favorability, float mood)
+    {
+        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage, favorability, mood);
+    }
+
+    /// <summary>
+    /// 決定具體社交行為代碼 (1~7，具名相容方法)
     /// </summary>
     public int DecideSocialActionWithSpread(int targetId, bool hasSpreadMessage)
     {
-        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage);
+        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage, 50f, 50f);
+    }
+
+    /// <summary>
+    /// 決定具體社交行為代碼 (1~7，具名啟發式方法，供 GDScript 明確呼叫避免重載歧義)
+    /// </summary>
+    public int DecideSocialActionHeuristic(int targetId, bool hasSpreadMessage, float favorability, float mood)
+    {
+        return NPCSocialDecision.DecideSocialAction(targetId, hasSpreadMessage, favorability, mood);
     }
 
     /// <summary>
@@ -335,14 +532,88 @@ public partial class NPCDecisionBridge : RefCounted
     // =========================================================================
 
     /// <summary>
-    /// 初始化記憶資料庫 (對應圖 1: 初始化所有資料庫 STSM, MTSM, LTSM, STM, MTM, LTM)
+    /// 解析並設置活動 SQLite 資料庫路徑 (自動建立目錄，支援 user:// 與空白預設)
     /// </summary>
-    public bool InitializeMemoryDatabase(string dbPath = "res://NPC_Memory.db", bool forceReset = false)
+    public string ResolveDatabasePath(string dbPath)
+    {
+        if (string.IsNullOrWhiteSpace(dbPath))
+        {
+            dbPath = "user://saves/active_memory.db";
+        }
+        string globalPath = ProjectSettings.GlobalizePath(dbPath);
+        try
+        {
+            string? dir = System.IO.Path.GetDirectoryName(globalPath);
+            if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+            {
+                System.IO.Directory.CreateDirectory(dir);
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] 建立資料庫目錄失敗: {ex.Message}");
+        }
+        UseDatabase.DatabasePath = globalPath;
+        return globalPath;
+    }
+
+    /// <summary>
+    /// 釋放 SQLite 連線池佔用的檔案控制代碼 (在刪除、覆蓋或備份 .db 檔前呼叫)
+    /// </summary>
+    public void ClearDatabaseConnections()
     {
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] ClearDatabaseConnections 失敗: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 複製/備份 SQLite 資料庫檔案 (例如從 active_memory.db 鏡像至 slot_X_memory.db，或反向載入)
+    /// </summary>
+    public bool CopyDatabase(string srcDbPath, string dstDbPath)
+    {
+        try
+        {
+            ClearDatabaseConnections();
+            string srcGlobal = ProjectSettings.GlobalizePath(string.IsNullOrWhiteSpace(srcDbPath) ? "user://saves/active_memory.db" : srcDbPath);
+            string dstGlobal = ProjectSettings.GlobalizePath(string.IsNullOrWhiteSpace(dstDbPath) ? "user://saves/active_memory.db" : dstDbPath);
+
+            if (!System.IO.File.Exists(srcGlobal))
+            {
+                GD.PrintErr($"[NPCDecisionBridge] 複製失敗，來源資料庫不存在: {srcGlobal}");
+                return false;
+            }
+
+            string? dstDir = System.IO.Path.GetDirectoryName(dstGlobal);
+            if (!string.IsNullOrEmpty(dstDir) && !System.IO.Directory.Exists(dstDir))
+            {
+                System.IO.Directory.CreateDirectory(dstDir);
+            }
+
+            System.IO.File.Copy(srcGlobal, dstGlobal, true);
+            GD.Print($"[NPCDecisionBridge] 記憶資料庫複製成功: {srcGlobal} -> {dstGlobal}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[NPCDecisionBridge] 複製記憶資料庫失敗: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 初始化記憶資料庫 (對應圖 1: 初始化所有資料庫 STSM, MTSM, LTSM, STM, MTM, LTM)
+    /// </summary>
+    public bool InitializeMemoryDatabase(string dbPath = "", bool forceReset = false)
+    {
+        try
+        {
+            string globalPath = ResolveDatabasePath(dbPath);
             if (forceReset)
             {
                 UseDatabase.ResetDatabase();
@@ -364,9 +635,9 @@ public partial class NPCDecisionBridge : RefCounted
     /// <summary>
     /// 檢查資料庫檔案是否存在
     /// </summary>
-    public bool HasMemoryDatabase(string dbPath = "res://NPC_Memory.db")
+    public bool HasMemoryDatabase(string dbPath = "")
     {
-        string globalPath = ProjectSettings.GlobalizePath(dbPath);
+        string globalPath = ResolveDatabasePath(dbPath);
         return System.IO.File.Exists(globalPath);
     }
 
@@ -374,13 +645,12 @@ public partial class NPCDecisionBridge : RefCounted
     /// 依據圖 1 (讀取存檔流程)，依序從 MTM, LTM, LTSM 載入資料並計算歷史分數
     /// 回傳 Godot Dictionary 供 NPCData 載入
     /// </summary>
-    public Godot.Collections.Dictionary LoadNPCStartupData(int npcId, string dbPath = "res://NPC_Memory.db")
+    public Godot.Collections.Dictionary LoadNPCStartupData(int npcId, string dbPath = "")
     {
         var result = new Godot.Collections.Dictionary();
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             var npc = new npc_class.NPCclass(npcId);
 
@@ -486,12 +756,11 @@ public partial class NPCDecisionBridge : RefCounted
     /// <summary>
     /// 依據圖 1 (新開局流程)，將使用者設定的詞條存入 LTM
     /// </summary>
-    public bool StoreNPCEntry(int npcId, Godot.Collections.Dictionary traitsDict, string dbPath = "res://NPC_Memory.db")
+    public bool StoreNPCEntry(int npcId, Godot.Collections.Dictionary traitsDict, string dbPath = "")
     {
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             var entry = new npc_class.Entry
             {
@@ -533,13 +802,12 @@ public partial class NPCDecisionBridge : RefCounted
         int action,
         int location,
         bool isSuccess,
-        string dbPath = "res://NPC_Memory.db")
+        string dbPath = "")
     {
         var result = new Godot.Collections.Dictionary();
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             var physiological = new npc_class.PhysiologicalStats
             {
@@ -606,13 +874,12 @@ public partial class NPCDecisionBridge : RefCounted
         int socialAction,
         Godot.Collections.Dictionary sourceSocial,
         Godot.Collections.Dictionary targetSocial,
-        string dbPath = "res://NPC_Memory.db")
+        string dbPath = "")
     {
         var result = new Godot.Collections.Dictionary();
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             var sourceNPC = new npc_class.NPCclass(sourceId)
             {
@@ -681,12 +948,11 @@ public partial class NPCDecisionBridge : RefCounted
     /// <summary>
     /// 依據圖 5 執行換日記憶結算前半 (步驟 1~5: SettleSTM -> SettleMTSM -> SettleSTSM)
     /// </summary>
-    public bool ExecuteMidnightSettlement1(string dbPath = "res://NPC_Memory.db")
+    public bool ExecuteMidnightSettlement1(string dbPath = "")
     {
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             UseDatabase.DailySettlement1();
             GD.Print("[NPCDecisionBridge] 午夜記憶結算前半 (STM/MTSM/STSM) 執行成功！");
@@ -707,13 +973,12 @@ public partial class NPCDecisionBridge : RefCounted
         Godot.Collections.Dictionary currentPhysiological,
         Godot.Collections.Dictionary currentTrust,
         Godot.Collections.Dictionary currentFriendships,
-        string dbPath = "res://NPC_Memory.db")
+        string dbPath = "")
     {
         var result = new Godot.Collections.Dictionary();
         try
         {
-            string globalPath = ProjectSettings.GlobalizePath(dbPath);
-            UseDatabase.DatabasePath = globalPath;
+            string globalPath = ResolveDatabasePath(dbPath);
 
             var npc = new npc_class.NPCclass(npcId);
 
@@ -795,8 +1060,11 @@ public partial class NPCDecisionBridge : RefCounted
             _decision = null;
             _socialDecision?.Dispose();
             _socialDecision = null;
+            _transformerDecision?.Dispose();
+            _transformerDecision = null;
             _isInitialized = false;
             _isSocialInitialized = false;
+            _isTransformerInitialized = false;
         }
         base.Dispose(disposing);
     }

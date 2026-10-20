@@ -176,8 +176,8 @@
     },
     {
       "cell": [
-        8,
-        34
+        8.0,
+        34.0
       ],
       "concealed": true,
       "entrance_dir": "south",
@@ -1869,6 +1869,17 @@
       "id": 21.0,
       "name": "自宅",
       "radius": 0.0
+    },
+    {
+      "cell": [
+        31,
+        43
+      ],
+      "concealed": false,
+      "entrance_dir": "south",
+      "id": 22.0,
+      "name": "小鎮布告欄",
+      "radius": 1.0
     }
   ]
 }

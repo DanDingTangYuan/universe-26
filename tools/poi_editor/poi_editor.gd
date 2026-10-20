@@ -2,7 +2,7 @@
 # 26號宇宙 (Universe 26) - 獨立 POI 視覺化與全屬性自訂工具 (POI Visual Editor)
 # 檔案路徑: res://tools/poi_editor/poi_editor.gd
 # 職責描述: 
-#   1. 提供滑鼠點選設定 22 大 POI 之【單點門口】、【雙格/多門口】、【多邊形範圍】
+#   1. 提供滑鼠點選設定 23 大 POI 之【單點門口】、【雙格/多門口】、【多邊形範圍】
 #   2. 提供完整屬性視覺化配置：
 #      - 是否進屋/進洞隱藏 (concealed: true / false)
 #      - 進出門朝向 (entrance_dir: south / north / east / west)
@@ -154,8 +154,8 @@ func load_pois_from_disk() -> void:
 		for p in poi_list:
 			var pid: int = int(p.get("id", -1))
 			if not p.has("concealed"):
-				# 預設：除原地(0)、農田(16)、釣魚場(17)、廣場(20)外，其餘預設為進入隱藏型
-				p["concealed"] = not (pid in [0, 16, 17, 20])
+				# 預設：除原地(0)、農田(16)、釣魚場(17)、廣場(20)、布告欄(22)外，其餘預設為進入隱藏型
+				p["concealed"] = not (pid in [0, 16, 17, 20, 22])
 			if not p.has("entrance_dir"):
 				p["entrance_dir"] = "south"
 			if not p.has("radius"):
@@ -476,6 +476,9 @@ func _draw() -> void:
 			elif p_id >= 12 and p_id <= 19:
 				color_fill = Color(1.0, 0.6, 0.1, 0.45)
 				color_border = Color(1.0, 0.8, 0.2, 0.9)
+			elif p_id == 22:
+				color_fill = Color(0.9, 0.68, 0.2, 0.55)
+				color_border = Color(1.0, 0.88, 0.35, 0.95)
 			else:
 				color_fill = Color(0.7, 0.7, 0.7, 0.3)
 				color_border = Color(0.9, 0.9, 0.9, 0.8)
@@ -493,7 +496,7 @@ func _draw() -> void:
 				draw_circle(center_px, rad * 16.0, Color(1, 0.8, 0.2, 0.08))
 				draw_arc(center_px, rad * 16.0, 0, TAU, 32, Color(1, 0.8, 0.2, 0.5 if not is_selected else 0.9), 1.5)
 
-			var tag: String = "🏠" if is_conc else "🌳"
+			var tag: String = "📋" if p_id == 22 else ("🏠" if is_conc else "🌳")
 			var label_text: String = "[%d] %s %s" % [p_id, p_name, tag]
 			var text_pos: Vector2 = rect_pos + Vector2(2, -4)
 			draw_string(font, text_pos + Vector2(1, 1), label_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.BLACK)
@@ -833,7 +836,7 @@ func _update_ui_list() -> void:
 		elif worker_map.has(pid):
 			extra_info = " [工:%s]" % ", ".join(worker_map[pid])
 
-		var tag_icon: String = "🏠" if is_conc else "🌳"
+		var tag_icon: String = "📋" if pid == 22 else ("🏠" if is_conc else "🌳")
 		var btn: Button = Button.new()
 		var is_sel: bool = (i == selected_poi_index)
 		btn.text = "%s %s[%d] %s: (%d, %d)%s" % [
@@ -863,7 +866,7 @@ func _update_ui_list_labels_only() -> void:
 		elif worker_map.has(pid):
 			extra_info = " [工:%s]" % ", ".join(worker_map[pid])
 
-		var tag_icon: String = "🏠" if is_conc else "🌳"
+		var tag_icon: String = "📋" if pid == 22 else ("🏠" if is_conc else "🌳")
 		var is_sel: bool = (i == selected_poi_index)
 		_poi_item_buttons[i].text = "%s %s[%d] %s: (%d, %d)%s" % [
 			"👉" if is_sel else "  ",

@@ -45,12 +45,12 @@ const MAX_STAT: float = 100.0
 const MAX_ITEM_COUNT: int = 9999
 
 # 每 Tick (1 遊戲分鐘) 自然代謝係數 (1 遊戲日 = 1440 Ticks)
-const HUNGER_DECAY_PER_TICK: float = 0.05 # 每天自然消耗約 72 點，需用餐 2~3 次
-const STAMINA_DECAY_IDLE: float = 0.03 # 平常活動消耗 (每天約 43 點)
-const STAMINA_DECAY_WORK: float = 0.12 # 工作時加劇消耗
-const STAMINA_RECOVERY_SLEEP: float = 0.25 # 睡眠時快速恢復 (睡 6 小時可回約 90 點)
-const SOCIAL_DECAY_PER_TICK: float = 0.035 # 社交渴望消耗
-const MOOD_DECAY_PER_TICK: float = 0.02 # 心情緩慢向平衡點靠攏
+const HUNGER_DECAY_PER_TICK: float = 0.03 # 平緩飽食消耗 (每天約 43 點，吃 1~2 餐即可維持整天充沛)
+const STAMINA_DECAY_IDLE: float = 0.015 # 平常活動輕微消耗 (每天約 21 點)
+const STAMINA_DECAY_WORK: float = 0.04 # 工作時穩定消耗 (工作一整天約 30 點)
+const STAMINA_RECOVERY_SLEEP: float = 0.35 # 睡眠時高效率恢復 (睡 4~5 小時即可回滿體力)
+const SOCIAL_DECAY_PER_TICK: float = 0.025 # 社交渴望平緩消耗
+const MOOD_DECAY_PER_TICK: float = 0.015 # 心情緩慢向平衡點靠攏
 
 # 15 維度特徵欄位名稱 (嚴格對照 npc_normalization.json)
 const FEATURE_NAMES: Array[String] = [
@@ -85,10 +85,19 @@ const FEATURE_NAMES: Array[String] = [
 # 4. 15 維度基礎生理與經濟數值 (The 15 Neural Features)
 # ------------------------------------------------------------------------------
 
+## 是否處於體力耗盡休養狀態 (遲滯保護：低於 25 進入，回滿至 75 方才解除)
+@export var is_exhausted: bool = false
+
 # 生理與心理指標 (0.0 ~ 100.0)
 @export var hp: float = 100.0
 @export var health: float = 100.0
-@export var stamina: float = 100.0
+@export var stamina: float = 100.0:
+	set(val):
+		stamina = clampf(val, MIN_STAT, MAX_STAT)
+		if stamina < 25.0:
+			is_exhausted = true
+		elif stamina >= 75.0:
+			is_exhausted = false
 @export var hunger: float = 100.0
 @export var social_desire: float = 50.0
 @export var mood: float = 80.0
@@ -170,6 +179,10 @@ const ACTION_WEIGHT_NAMES: Array[String] = [
 
 ## 最近一次社交模型 (ONNX) 評估快取 (含候選人分數與選定行為)
 @export var last_social_evaluation: Dictionary = {}
+
+## NPC 已知城鎮情報字典 { rumor_id: String -> Dictionary }
+## 每筆包含: { "learned_from": String, "learned_from_name": String, "learned_day": int, "learned_tick": int, "generation": int, "shared_to": Array[String] }
+@export var known_rumors: Dictionary = {}
 
 ## 取得當前已啟用的 LTM 靈魂特質中文清單 (若 LTM entries 無啟用項目則退回 ltm_traits)
 func get_active_ltm_trait_labels() -> Array[String]:
@@ -446,7 +459,8 @@ func to_dict() -> Dictionary:
 		"action_weights": action_weights.duplicate(),
 		"history_scores": history_scores.duplicate(),
 		"last_social_evaluation": last_social_evaluation.duplicate(),
-		"personality_offset": Array(personality_offset)
+		"personality_offset": Array(personality_offset),
+		"known_rumors": known_rumors.duplicate(true)
 	}
 
 ## 從字典反序列化 (由模板 JSON 初始化或讀檔)
@@ -510,7 +524,90 @@ func from_dict(data: Dictionary) -> void:
 		for i in range(mini(arr.size(), 15)):
 			personality_offset[i] = float(arr[i])
 
+	if data.has("known_rumors") and data["known_rumors"] is Dictionary:
+		known_rumors = data["known_rumors"].duplicate(true)
+
 	stats_changed.emit(npc_id)
+
+# ------------------------------------------------------------------------------
+# 8.5. 情報傳播與認知系統 (Information & Rumor System)
+# ------------------------------------------------------------------------------
+
+## 檢查是否已獲知特定情報
+func has_rumor(rumor_id: String) -> bool:
+	return known_rumors.has(rumor_id)
+
+## 獲取尚未向特定 NPC (target_id) 轉述過的已知情報 ID 清單
+func get_unshared_rumors_for(target_id: String) -> Array[String]:
+	var unshared: Array[String] = []
+	for r_id in known_rumors.keys():
+		var entry: Dictionary = known_rumors[r_id]
+		var shared_list: Array = entry.get("shared_to", [])
+		if not (target_id in shared_list):
+			unshared.append(str(r_id))
+	return unshared
+
+## 標記情報已向特定 NPC 轉述
+func mark_rumor_shared(rumor_id: String, target_id: String) -> void:
+	if known_rumors.has(rumor_id):
+		var shared_list: Array = known_rumors[rumor_id].get("shared_to", [])
+		if not (target_id in shared_list):
+			shared_list.append(target_id)
+			known_rumors[rumor_id]["shared_to"] = shared_list
+
+## 學習新情報並套用神經行為引力 / 屬性影響
+func learn_rumor(
+	rumor_dict: Dictionary,
+	from_id: String,
+	from_name: String,
+	day: int,
+	tick: int,
+	gen: int
+) -> bool:
+	var r_id: String = str(rumor_dict.get("id", ""))
+	if r_id.is_empty() or has_rumor(r_id):
+		return false
+
+	known_rumors[r_id] = {
+		"learned_from": from_id,
+		"learned_from_name": from_name,
+		"learned_day": day,
+		"learned_tick": tick,
+		"generation": gen,
+		"shared_to": []
+	}
+
+	# 套用神經行為引力與身心影響
+	var effects: Dictionary = rumor_dict.get("effects", {})
+	apply_rumor_effects(effects)
+
+	var r_title: String = str(rumor_dict.get("title", "未命名情報"))
+	add_stm_event("聽聞情報: [%s] (來自 %s, 第 %d 代)" % [r_title, from_name, gen])
+	stats_changed.emit(npc_id)
+	return true
+
+## 套用情報的神經行為引力與屬性調整
+func apply_rumor_effects(effects: Dictionary) -> void:
+	if effects.is_empty():
+		return
+	if effects.has("social_desire_bonus"):
+		social_desire = clampf(social_desire + float(effects["social_desire_bonus"]), MIN_STAT, MAX_STAT)
+	if effects.has("mood_bonus"):
+		mood = clampf(mood + float(effects["mood_bonus"]), MIN_STAT, MAX_STAT)
+	if effects.has("health_vigilance"):
+		# 提升就醫戒備心 (心情稍降促使其提高就醫優先序)
+		mood = clampf(mood - 5.0, MIN_STAT, MAX_STAT)
+	if effects.has("fun_desire_bonus"):
+		mood = clampf(mood + float(effects["fun_desire_bonus"]) * 0.5, MIN_STAT, MAX_STAT)
+	if effects.has("type") and effects["type"] == "gossip":
+		var a_id: String = str(effects.get("npc_a_id", ""))
+		var b_id: String = str(effects.get("npc_b_id", ""))
+		var delta_fav: float = float(effects.get("delta_fav", 0.0))
+		var delta_trust: float = float(effects.get("delta_trust", 0.0))
+		if not a_id.is_empty() and a_id != npc_id:
+			modify_relationship(a_id, delta_fav, delta_trust)
+		if not b_id.is_empty() and b_id != npc_id:
+			modify_relationship(b_id, delta_fav, delta_trust)
 
 # ------------------------------------------------------------------------------
 # 9. 物品與資源管理 (Inventory & Eating)
@@ -573,15 +670,15 @@ func consume_item(item_type: String, amount: int = 1) -> bool:
 func eat_food(prefer_lunchbox: bool = true) -> bool:
 	if prefer_lunchbox and lunchbox > 0:
 		consume_item("lunchbox", 1)
-		hunger = clampf(hunger + 45.0, MIN_STAT, MAX_STAT)
-		stamina = clampf(stamina + 15.0, MIN_STAT, MAX_STAT)
-		mood = clampf(mood + 10.0, MIN_STAT, MAX_STAT)
+		hunger = clampf(hunger + 55.0, MIN_STAT, MAX_STAT)
+		stamina = clampf(stamina + 35.0, MIN_STAT, MAX_STAT)
+		mood = clampf(mood + 15.0, MIN_STAT, MAX_STAT)
 		return true
 	elif food > 0:
 		consume_item("food", 1)
-		hunger = clampf(hunger + 35.0, MIN_STAT, MAX_STAT)
-		stamina = clampf(stamina + 10.0, MIN_STAT, MAX_STAT)
-		mood = clampf(mood + 5.0, MIN_STAT, MAX_STAT)
+		hunger = clampf(hunger + 45.0, MIN_STAT, MAX_STAT)
+		stamina = clampf(stamina + 25.0, MIN_STAT, MAX_STAT)
+		mood = clampf(mood + 10.0, MIN_STAT, MAX_STAT)
 		return true
 	return false
 

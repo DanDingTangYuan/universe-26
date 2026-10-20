@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
@@ -36,7 +36,7 @@ namespace computeAttribute
                         changedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 閒逛成功會稍微增加心情
                         break;
                     case 1:
-                        changedStateValue.ChangeMood += Random.Shared.Next(25, 40); // 閱讀會大幅增加心情
+                        changedStateValue.ChangeMood += Random.Shared.Next(8, 16); // 閱讀適度增加心情，平抑回報斷層
                         break;
                     case 2:
                         changedStateValue.ChangeMood += Random.Shared.Next(1, 5);
@@ -77,12 +77,14 @@ namespace computeAttribute
                                 changedStateValue.ChangeFood -= 1; // 吃掉一個食物
                                 changedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 吃食物會增加心情
                                 changedStateValue.ChangeHunger += Random.Shared.Next(40, 60); // 吃食物會增加飢餓值
+                                changedStateValue.ChangeStamina += Random.Shared.Next(25, 36); // 食用食物大幅回補體力 (+25~+35)
                             }
                             else if (physiological.Lunchbox > 0)
                             {
                                 changedStateValue.ChangeLunchbox -= 1; // 吃掉一個便當
                                 changedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 吃便當會增加心情
                                 changedStateValue.ChangeHunger += Random.Shared.Next(40, 60); // 吃便當會增加飢餓值
+                                changedStateValue.ChangeStamina += Random.Shared.Next(35, 46); // 食用便當大幅回補體力 (+35~+45)
                             }
                         }
                         break;
@@ -106,7 +108,7 @@ namespace computeAttribute
                         break;
                     case 7:
                         changedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 巡田水成功會稍微增加心情
-                        changedStateValue.ChangeStamina -= Random.Shared.Next(10, 21); // 巡田水會消耗體力
+                        changedStateValue.ChangeStamina -= Random.Shared.Next(2, 6); // 巡田水/勞動適度消耗體力 (單次扣2~5)
                         break;
                     case 8:
                         changedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 販售物品成功會稍微增加心情
@@ -162,117 +164,133 @@ namespace computeAttribute
              */
             switch (source.Action.SocialAction)
             {
-                case 1:
-                    if (source.Social.Favorability[targetId - 1] >= 60)
+                case 1: // 普通聊天
+                    int sFav1 = (targetId >= 1 && targetId <= 20) ? source.Social.Favorability[targetId - 1] : 50;
+                    if (sFav1 >= 40)
                     {
-                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 普通聊天會稍微增加心情
-                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 普通聊天會稍微增加信任度
-                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 普通聊天會稍微增加好感度
+                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(5, 16); // 穩定提升心情
+                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 稍微增加信任度
+                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(2, 6); // 破冰正向回饋增加好感度
                     }
                     else
                     {
-                        source.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 普通聊天可能會稍微降低心情
-                        source.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-5, 5); // 普通聊天可能會稍微降低信任度
-                        source.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 5); // 普通聊天可能會稍微降低好感度
+                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(-2, 4); // 氣氛微尷尬
+                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(-1, 3);
+                        source.ChangedStateValue.ChangeFavorability += (sFav1 < 25) ? -Random.Shared.Next(1, 4) : Random.Shared.Next(-1, 2);
                     }
 
-                    if (target.Social.Favorability[sourceId - 1] >= 60)
+                    int tFav1 = (sourceId >= 1 && sourceId <= 20) ? target.Social.Favorability[sourceId - 1] : 50;
+                    if (tFav1 >= 40)
                     {
-                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 普通聊天會稍微增加心情
-                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 普通聊天會稍微增加信任度
-                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 普通聊天會稍微增加好感度
+                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(5, 16);
+                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5);
+                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(2, 6);
                     }
                     else
                     {
-                        target.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 普通聊天可能會稍微降低心情
-                        target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-5, 5); // 普通聊天可能會稍微降低信任度
-                        target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 5); // 普通聊天可能會稍微降低好感度
+                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(-2, 4);
+                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(-1, 3);
+                        target.ChangedStateValue.ChangeFavorability += (tFav1 < 25) ? -Random.Shared.Next(1, 4) : Random.Shared.Next(-1, 2);
                     }
                     break;
 
-                case 2:
-                    if (source.Social.Trust[targetId - 1] >= 60)
+                case 2: // 討論主題
+                    int sTrust2 = (targetId >= 1 && targetId <= 20) ? source.Social.Trust[targetId - 1] : 50;
+                    if (sTrust2 >= 45)
                     {
-                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 討論某個主題會稍微增加心情
-                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 討論某個主題會稍微增加信任度
-                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 討論某個主題會稍微增加好感度
+                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 討論共鳴增加心情
+                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(2, 6); // 增加信任度
+                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(2, 6); // 增加好感度
                     }
                     else
                     {
-                        source.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 討論某個主題可能會稍微降低心情
-                        source.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-5, 5); // 討論某個主題可能會稍微降低信任度
-                        source.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 5); // 討論某個主題可能會稍微降低好感度
+                        source.ChangedStateValue.ChangeMood -= Random.Shared.Next(0, 6); // 意見稍有分歧
+                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(-1, 3);
+                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(-1, 2);
                     }
 
-                    if (target.Social.Trust[sourceId - 1] >= 60)
+                    int tTrust2 = (sourceId >= 1 && sourceId <= 20) ? target.Social.Trust[sourceId - 1] : 50;
+                    if (tTrust2 >= 45)
                     {
-                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 討論某個主題會稍微增加心情
-                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 討論某個主題會稍微增加信任度
-                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 討論某個主題會稍微增加好感度
+                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21);
+                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(2, 6);
+                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(2, 6);
                     }
                     else
                     {
-                        target.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 討論某個主題可能會稍微降低心情
-                        target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-5, 5); // 討論某個主題可能會稍微降低信任度
-                        target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 5); // 討論某個主題可能會稍微降低好感度
+                        target.ChangedStateValue.ChangeMood -= Random.Shared.Next(0, 6);
+                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(-1, 3);
+                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(-1, 2);
                     }
                     break;
 
-                case 3:
-                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(0, 5); // 詢問問題會稍微增加心情
-                    source.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 10); // 詢問問題會稍微增加信任度
-                    source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 詢問問題會稍微增加好感度
+                case 3: // 詢問問題 (雙向回饋)
+                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 6); // 請教獲益增加心情
+                    source.ChangedStateValue.ChangeTrust += Random.Shared.Next(2, 7); // 增加信任度
+                    source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 5); // 增加好感度
+
+                    target.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 6); // 受請教感增加心情
+                    target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5);
+                    target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 4);
                     break;
 
-                case 4:
-                    if (Random.Shared.Next(1, 101) > 50)    // 一起做某些事情成功
+                case 4: // 共同活動 (依關係動態判定成功率)
+                    int sFav4 = (targetId >= 1 && targetId <= 20) ? source.Social.Favorability[targetId - 1] : 50;
+                    int tFav4 = (sourceId >= 1 && sourceId <= 20) ? target.Social.Favorability[sourceId - 1] : 50;
+                    int successRate = Math.Clamp(70 + (sFav4 + tFav4) / 10, 70, 90);
+
+                    if (Random.Shared.Next(1, 101) <= successRate) // 共同活動成功
                     {
-                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 一起做某些事情會稍微增加心情
-                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(6, 11); // 一起做某些事情會稍微增加信任度
-                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(6, 11); // 一起做某些事情會稍微增加好感度
-                        source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 一起做某些事情會消耗體力
+                        source.ChangedStateValue.ChangeMood += Random.Shared.Next(12, 25); // 大幅提升心情
+                        source.ChangedStateValue.ChangeTrust += Random.Shared.Next(6, 13); // 大幅增加信任度
+                        source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(7, 15); // 大幅增加好感度
+                        source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(3, 8); // 輕量體力消耗
 
-                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(10, 21); // 一起做某些事情會稍微增加心情
-                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(6, 11); // 一起做某些事情會稍微增加信任度
-                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(6, 11); // 一起做某些事情會稍微增加好感度
-                        target.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 一起做某些事情會消耗體力
+                        target.ChangedStateValue.ChangeMood += Random.Shared.Next(12, 25);
+                        target.ChangedStateValue.ChangeTrust += Random.Shared.Next(6, 13);
+                        target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(7, 15);
+                        target.ChangedStateValue.ChangeStamina -= Random.Shared.Next(3, 8);
                     }
-                    else    // 一起做某些事情失敗
+                    else // 共同活動略有不順
                     {
-                        source.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 一起做某些事情可能會稍微降低心情
-                        source.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-2, 5); // 一起做某些事情可能會稍微降低信任度
-                        source.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 10); // 一起做某些事情可能會稍微降低好感度
-                        source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 一起做某些事情會消耗體力
+                        source.ChangedStateValue.ChangeMood -= Random.Shared.Next(1, 6);
+                        source.ChangedStateValue.ChangeTrust -= Random.Shared.Next(0, 3);
+                        source.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(0, 3);
+                        source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(2, 6);
 
-                        target.ChangedStateValue.ChangeMood -= Random.Shared.Next(-5, 11); // 一起做某些事情可能會稍微降低心情
-                        target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(-2, 5); // 一起做某些事情可能會稍微降低信任度
-                        target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 10); // 一起做某些事情可能會稍微降低好感度
-                        target.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 一起做某些事情會消耗體力
+                        target.ChangedStateValue.ChangeMood -= Random.Shared.Next(1, 6);
+                        target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(0, 3);
+                        target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(0, 3);
+                        target.ChangedStateValue.ChangeStamina -= Random.Shared.Next(2, 6);
                     }
                     break;
 
-                case 5:
-                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 11); // 捉弄別人會稍微提高心情
-                    source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 捉弄別人會消耗體力
+                case 5: // 捉弄
+                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(2, 8); // 惡作劇心情
+                    source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 6);
 
-                    target.ChangedStateValue.ChangeMood -= Random.Shared.Next(1, 11); // 被捉弄會降低心情
-                    target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(0, 5); // 被捉弄會稍微降低信任度
-                    target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(1, 11); // 被捉弄會稍微降低好感度
+                    target.ChangedStateValue.ChangeMood -= Random.Shared.Next(4, 10); // 被捉弄不悅
+                    target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(1, 4);
+                    target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(2, 6);
                     break;
 
-                case 6:
-                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 11); // 欺騙別人會稍微提高心情
-                    source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 11); // 欺騙別人會消耗體力
+                case 6: // 欺騙
+                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(2, 8);
+                    source.ChangedStateValue.ChangeStamina -= Random.Shared.Next(1, 6);
 
-                    target.ChangedStateValue.ChangeMood -= Random.Shared.Next(1, 11); // 被欺騙會降低心情
-                    target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(1, 11); // 被欺騙會降低信任度
-                    target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(0, 5); // 被欺騙會稍微降低好感度
+                    target.ChangedStateValue.ChangeMood -= Random.Shared.Next(5, 12); // 被欺騙憤怒
+                    target.ChangedStateValue.ChangeTrust -= Random.Shared.Next(3, 8);
+                    target.ChangedStateValue.ChangeFavorability -= Random.Shared.Next(3, 7);
                     break;
 
-                case 7:
-                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 訊息傳播會稍微提高心情
-                    target.ChangedStateValue.ChangeMood += Random.Shared.Next(1, 5); // 訊息傳播會稍微提高心情
-                    target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5); // 訊息傳播會稍微提高信任度
+                case 7: // 訊息傳播
+                    source.ChangedStateValue.ChangeMood += Random.Shared.Next(2, 6);
+                    source.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5);
+                    source.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 4);
+
+                    target.ChangedStateValue.ChangeMood += Random.Shared.Next(2, 6);
+                    target.ChangedStateValue.ChangeTrust += Random.Shared.Next(1, 5);
+                    target.ChangedStateValue.ChangeFavorability += Random.Shared.Next(1, 4);
                     break;
             }
 
@@ -289,6 +307,14 @@ namespace computeAttribute
             n += changedStateValue.ChangeSocialDesire * 0.1;
             n += changedStateValue.ChangeMood * 0.1;
             n += changedStateValue.ChangeMoney * 0.2;
+
+            // 勞動即時產出估值：計入剛採集/生產物資的資產估值，抵消勞動體力消耗，消除跨職業獎勵斷層
+            n += changedStateValue.ChangeCrops * 0.5;
+            n += changedStateValue.ChangeMineral * 0.4;
+            n += changedStateValue.ChangeWood * 0.3;
+            n += changedStateValue.ChangeStone * 0.2;
+            n += changedStateValue.ChangeFish * 0.4;
+
             return n;
         }
 
@@ -309,19 +335,19 @@ namespace computeAttribute
             return Weight;
         }
 
-        // 計算社交行動的正向/中性/負向
+        // 計算社交行動的正向(1)/中性(0)/負向(-1)
         public static int DetermineSTSMType(int changeTrust, int changeFriendship, int changeMood, int eventType)
         {
-            if (eventType == 7 || changeMood == 0)
-                return 0;
-
-            if (changeTrust + changeFriendship + changeMood < 0)
-                return -1;
-
             if (eventType == 5 || eventType == 6)
                 return -1;
 
-            return 1;
+            int sum = changeTrust + changeFriendship + changeMood;
+            if (sum < 0)
+                return -1;
+            if (sum > 0)
+                return 1;
+
+            return 0;
         }
 
         // 重置changedStateValue的值

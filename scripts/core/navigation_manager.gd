@@ -266,26 +266,28 @@ func local_to_map(pos: Vector2) -> Vector2i:
 	var local_pos: Vector2 = to_local(pos)
 	return Vector2i(floor(local_pos.x / tile_size.x), floor(local_pos.y / tile_size.y))
 
-## 取得某網格周遭最近的可通行地塊 (若目標為障礙物時非常實用)
-func get_closest_walkable_cell(target_cell: Vector2i, max_radius: int = 4) -> Vector2i:
+## 取得某網格周遭最近的可通行地塊 (完整環狀由近至遠掃描，若目標為障礙物時非常實用)
+func get_closest_walkable_cell(target_cell: Vector2i, max_radius: int = 6) -> Vector2i:
 	if is_cell_walkable(target_cell):
 		return target_cell
 		
 	for r: int in range(1, max_radius + 1):
-		# 四向優先搜尋
-		var neighbors: Array[Vector2i] = [
-			target_cell + Vector2i(0, -r),
-			target_cell + Vector2i(0, r),
-			target_cell + Vector2i(-r, 0),
-			target_cell + Vector2i(r, 0),
-			target_cell + Vector2i(-r, -r),
-			target_cell + Vector2i(r, -r),
-			target_cell + Vector2i(-r, r),
-			target_cell + Vector2i(r, r)
-		]
-		for n: Vector2i in neighbors:
-			if is_cell_walkable(n):
-				return n
+		# 掃描水平上下兩邊緣
+		for dx in range(-r, r + 1):
+			var n1 := target_cell + Vector2i(dx, -r)
+			if is_cell_walkable(n1):
+				return n1
+			var n2 := target_cell + Vector2i(dx, r)
+			if is_cell_walkable(n2):
+				return n2
+		# 掃描垂直左右兩邊緣 (排除頂點重複)
+		for dy in range(-r + 1, r):
+			var n3 := target_cell + Vector2i(-r, dy)
+			if is_cell_walkable(n3):
+				return n3
+			var n4 := target_cell + Vector2i(r, dy)
+			if is_cell_walkable(n4):
+				return n4
 	return Vector2i(-1, -1)
 
 ## 取得目標中心周圍半徑內的隨機可通行網格 (供 NPC 隨機漫遊)

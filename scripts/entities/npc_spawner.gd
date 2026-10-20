@@ -11,6 +11,7 @@ const NPCInspectorClass = preload("res://scripts/ui/npc_inspector.gd")
 const NPCScene = preload("res://scene/NPCs/npc_1.tscn")
 const NPCControllerClass = preload("res://scripts/entities/npc_controller.gd")
 const NPCDataClass = preload("res://scripts/entities/npc_data.gd")
+const BulletinBoardClass = preload("res://scripts/objects/bulletin_board.gd")
 
 const TEMPLATES_PATH: String = "res://data/npc_templates.json"
 const POIS_PATH: String = "res://data/poi_locations.json"
@@ -25,8 +26,8 @@ const POIS_PATH: String = "res://data/poi_locations.json"
 ## 是否在 _ready 時自動執行生成
 @export var auto_spawn_on_ready: bool = true
 
-## 是否載入現有記憶資料庫 (對應圖 1: 是否讀取存檔。若為 false 則視為新開局並重置 DB)
-@export var load_existing_memory_save: bool = true
+## 是否載入現有記憶資料庫 (對應圖 1: 是否讀取存檔。預設為 false 全新開局；若手動勾選則自現有 MTM/LTM/LTSM 載入)
+@export var load_existing_memory_save: bool = false
 
 # ------------------------------------------------------------------------------
 # 2. 內部狀態 (Internal Variables)
@@ -53,6 +54,7 @@ func initialize_and_spawn() -> void:
 	_ensure_navigation_manager()
 	_ensure_npc_inspector()
 	load_and_register_pois()
+	_ensure_bulletin_board()
 	load_templates()
 
 	var global_node: Node = _get_global()
@@ -63,9 +65,12 @@ func initialize_and_spawn() -> void:
 	# ============================================================
 	var has_db: bool = false
 	if decision_service and decision_service.has_method("has_memory_database"):
-		has_db = decision_service.has_memory_database("res://NPC_Memory.db")
+		has_db = decision_service.has_memory_database()
 
 	var is_loading_save: bool = load_existing_memory_save and has_db
+	if global_node and "is_new_game_requested" in global_node and bool(global_node.is_new_game_requested):
+		is_loading_save = false
+		global_node.is_new_game_requested = false
 
 	if not is_loading_save:
 		# ------------------------------------------------------------
@@ -73,8 +78,8 @@ func initialize_and_spawn() -> void:
 		# 1. 初始化所有資料庫 (STSM, MTSM, LTSM, STM, MTM, LTM)
 		# ------------------------------------------------------------
 		if decision_service and decision_service.has_method("initialize_memory_database"):
-			decision_service.initialize_memory_database("res://NPC_Memory.db", true)
-			print("[NPCSpawner] 【圖1-新遊戲】成功初始化 6 大記憶資料庫 (NPC_Memory.db)！")
+			decision_service.initialize_memory_database("", true)
+			print("[NPCSpawner] 【圖1-新遊戲】成功初始化 6 大記憶資料庫 (active_memory.db)！")
 
 	# 生成所有 NPC 實體
 	spawn_all()
@@ -95,9 +100,15 @@ func initialize_and_spawn() -> void:
 					# 4. 計算 NPC 對彼此的互動歷史分數
 					# --------------------------------------------------------
 					if decision_service and decision_service.has_method("load_npc_startup_data"):
-						var startup_dict: Dictionary = decision_service.load_npc_startup_data(num_id, "res://NPC_Memory.db")
+						var startup_dict: Dictionary = decision_service.load_npc_startup_data(num_id)
 						if startup_dict.get("success", false):
 							data.apply_startup_data(startup_dict)
+							# 開局防呆保護：避免剛開局繼承舊存檔瀕死或歸零生命值
+							if data.hp <= 0.0:
+								push_warning("[NPCSpawner] ⚠️ NPC %s 於存檔中生命值歸零，開局給予急救甦醒保護 (HP 恢復至 50, 飽食恢復至 50)" % data.npc_id)
+								data.hp = 50.0
+								data.hunger = maxf(data.hunger, 50.0)
+								data.health = maxf(data.health, 50.0)
 							print("[NPCSpawner] 【圖1-讀取存檔】NPC %s 已自 MTM/LTM/LTSM 完整還原！" % data.npc_id)
 				else:
 					# --------------------------------------------------------
@@ -106,7 +117,7 @@ func initialize_and_spawn() -> void:
 					# 3. 將詞條存入 LTM
 					# --------------------------------------------------------
 					if decision_service and decision_service.has_method("store_npc_entry"):
-						decision_service.store_npc_entry(num_id, data.ltm_entries, "res://NPC_Memory.db")
+						decision_service.store_npc_entry(num_id, data.ltm_entries)
 						print("[NPCSpawner] 【圖1-新遊戲】NPC %s 詞條已存入 LTM 資料庫！" % data.npc_id)
 
 	print("[NPCSpawner] 【圖1-結束】啟動載入流程完成，開始模擬！")
@@ -131,6 +142,26 @@ func _ensure_npc_inspector() -> void:
 	else:
 		add_child(inspector)
 	print("[NPCSpawner] 自動實例化並加載 NPCInspector 即時觀測視窗。")
+
+## 確保小鎮布告欄 (POI 22) 站位與可視化物件已掛載
+func _ensure_bulletin_board() -> void:
+	var existing = null
+	if get_parent() != null:
+		existing = get_parent().find_child("TownBulletinBoard", true, false)
+	if existing == null:
+		var st: SceneTree = Engine.get_main_loop() as SceneTree
+		if st and st.current_scene:
+			existing = st.current_scene.find_child("TownBulletinBoard", true, false)
+	if existing != null:
+		return
+
+	var board = BulletinBoardClass.new()
+	board.name = "TownBulletinBoard"
+	if get_parent() != null:
+		get_parent().add_child(board)
+	else:
+		add_child(board)
+	print("[NPCSpawner] 📋 成功自動加載小鎮布告欄 (TownBulletinBoard) 站位物件！")
 
 ## 確保導航管理器就緒且已註冊至 Global
 func _ensure_navigation_manager() -> void:
@@ -271,7 +302,7 @@ func spawn_npc(template: Dictionary) -> CharacterBody2D:
 	data.hp = float(init_stats.get("hp", 100.0))
 	data.health = float(init_stats.get("health", 100.0))
 	data.stamina = float(init_stats.get("stamina", 100.0))
-	data.hunger = float(init_stats.get("hunger", 80.0))
+	data.hunger = float(init_stats.get("hunger", 90.0))
 	data.social_desire = float(init_stats.get("social_desire", 60.0))
 	data.mood = float(init_stats.get("mood", 80.0))
 	data.money = int(init_stats.get("money", 100))
@@ -281,7 +312,7 @@ func spawn_npc(template: Dictionary) -> CharacterBody2D:
 	data.crops = int(init_stats.get("crops", 0))
 	data.fish = int(init_stats.get("fish", 0))
 	data.food = int(init_stats.get("food", 0))
-	data.lunchbox = int(init_stats.get("lunchbox", 0))
+	data.lunchbox = maxi(int(init_stats.get("lunchbox", 0)), 1) # 保底配給 1 個隨身便當，杜絕開局飢餓猝死
 
 	# 載入 LTM 詞條配置 (若模板中有自訂設定)
 	var template_entries: Dictionary = template.get("entries", {})
@@ -290,12 +321,20 @@ func spawn_npc(template: Dictionary) -> CharacterBody2D:
 			data.ltm_entries[k] = bool(template_entries[k])
 		data.calculate_personality_offset_from_entries()
 
+	# 檢查玩家自訂的 NPC 性格詞條覆寫 (由開始畫面/設定選單配置)
+	var global_node: Node = _get_global()
+	if global_node and global_node.has_method("get_custom_npc_traits"):
+		var custom_traits: Dictionary = global_node.get_custom_npc_traits(npc_id)
+		if not custom_traits.is_empty():
+			for k in custom_traits.keys():
+				data.ltm_entries[k] = bool(custom_traits[k])
+			data.calculate_personality_offset_from_entries()
+
 	# 綁定至控制器
 	npc.npc_data = data
 
 	# 4. 出生位置配置：預設出現在自宅門口
 	var nav = _get_nav_manager()
-	var global_node: Node = _get_global()
 	var spawn_cell: Vector2i = Vector2i(20, 20) # 預設安全備用格
 	if global_node and global_node.has_method("get_poi_cell"):
 		var home_cell: Vector2i = global_node.get_poi_cell(data.home_poi_id)
