@@ -128,6 +128,7 @@ var _pending_on_complete: Callable = Callable()
 var _last_evaluated_social_score: float = 0.5
 var _last_candidates_eval: Dictionary = {}
 var _action_memory_saved: bool = false
+var _last_billboard_check_tick: int = -999
 
 # ------------------------------------------------------------------------------
 # 5. 生命週期 (Lifecycle)
@@ -303,6 +304,13 @@ func _on_global_tick_passed(current_tick: int) -> void:
 	# 2. 路人巡視周遭：非隱藏且未出診狀態下，週期性檢查身邊是否有倒地昏迷者並自主通報
 	if not is_concealed and not is_rescuing and (current_tick % 3 == 0):
 		_check_and_report_nearby_emergencies()
+
+	# 2.5 周期性檢測：非隱藏且非睡眠狀態下，檢查當前位置是否路過或身處布告欄周遭
+	if not is_concealed and not is_rescuing and not is_sleeping and (current_tick % 10 == 0):
+		var nav = _get_nav_manager()
+		if nav:
+			var cur_c: Vector2i = nav.local_to_map(global_position)
+			_check_passing_by_billboard(cur_c)
 
 	# 3. 醫護人員專用：當班執勤且醫院當前無病患時，自主出診救援倒地市民
 	if npc_data.job_id == 5 and not is_rescuing:
@@ -704,8 +712,8 @@ func _move_to_poi_and_act(poi_id: int, target_state: State, duration: float, on_
 			set_state(target_state)
 			if is_concealed_poi:
 				enter_building(str(poi_data.get("entrance_dir", "south")))
-			if poi_id == 22 or poi_id == 20 or poi_id == 12:
-				_check_billboard_rumors(poi_id)
+			if poi_id == 22:
+				_check_billboard_rumors(poi_id, false)
 			if on_arrive.is_valid():
 				on_arrive.call()
 			_action_timer = duration
@@ -715,16 +723,16 @@ func _move_to_poi_and_act(poi_id: int, target_state: State, duration: float, on_
 		set_state(target_state)
 		if poi_data.get("concealed", false):
 			enter_building(str(poi_data.get("entrance_dir", "south")))
-		if poi_id == 22 or poi_id == 20 or poi_id == 12:
-			_check_billboard_rumors(poi_id)
+		if poi_id == 22:
+			_check_billboard_rumors(poi_id, false)
 		if on_arrive.is_valid():
 			on_arrive.call()
 		_action_timer = duration
 	)
 
-## 檢查並學習公佈欄上的新情報 (當 NPC 抵達專屬布告欄 POI 22 或 廣場/商店時)
-func _check_billboard_rumors(poi_id: int) -> void:
-	if npc_data == null or is_dead:
+## 檢查並學習公佈欄上的新情報 (專程前往 POI 22 或路過布告欄周遭時觸發)
+func _check_billboard_rumors(poi_id: int = 22, is_passing_by: bool = false) -> void:
+	if npc_data == null or is_dead or is_fainted or is_concealed:
 		return
 	var g: Node = _get_global()
 	if g == null or not g.has_method("get_diffusion_manager"):
@@ -734,22 +742,45 @@ func _check_billboard_rumors(poi_id: int) -> void:
 		return
 
 	var billboard_rumors: Array[Dictionary] = diff_mgr.get_billboard_rumors()
+	if billboard_rumors.is_empty():
+		return
+
+	var cur_tick: int = _get_current_tick()
+	# 路過檢測防抖冷卻 (至少間隔 30 Ticks 避免每格連續觸發)
+	if is_passing_by and (cur_tick - _last_billboard_check_tick < 30):
+		return
+
 	for r in billboard_rumors:
 		var r_id: String = str(r.get("id", ""))
 		if not npc_data.has_rumor(r_id):
-			# 若專門前來布告欄 (POI 22) 則 100% 閱讀；若只是路過廣場/商店則 35% 機率駐足閱讀
-			var read_chance: float = 1.0 if (poi_id == 22) else 0.35
+			# 若專門前來布告欄 (POI 22) 則 100% 閱讀；若為路過周遭則 65% 機率駐足閱覽
+			var read_chance: float = 0.65 if is_passing_by else 1.0
 			if randf() <= read_chance:
+				_last_billboard_check_tick = cur_tick
 				var cur_day: int = _get_current_day()
-				var cur_tick: int = _get_current_tick()
 				var s_name: String = npc_data.npc_name if not npc_data.npc_name.is_empty() else name
 				var ok: bool = npc_data.learn_rumor(r, "billboard", "小鎮布告欄", cur_day, cur_tick, 1)
 				if ok:
 					diff_mgr.record_spread(r_id, "billboard", "小鎮布告欄", npc_data.npc_id, s_name, cur_day, cur_tick, poi_id, 0)
-					show_speech_bubble("📋 閱覽布告欄公告...", 3.0)
+					var bubble_msg: String = "📋 路過閱覽布告欄公告..." if is_passing_by else "📋 閱覽布告欄公告..."
+					show_speech_bubble(bubble_msg, 2.5)
 					# [保留接口] 未來切換不同氣泡 frame / 圖像時取消以下註解：
 					# set_bubble_frame(3) # 閱讀公佈欄氣泡
 					break
+
+## 檢查當前座標是否路過小鎮布告欄 (POI 22)
+func _check_passing_by_billboard(cur_cell: Vector2i) -> void:
+	if npc_data == null or is_dead or is_fainted or is_concealed:
+		return
+
+	var billboard_cell: Vector2i = _get_poi_cell(22)
+	if billboard_cell == Vector2i(-1, -1):
+		return
+
+	# 若距離布告欄在 2.5 格以內 (即布告欄周遭或鄰格路過)，判定為路過
+	var dist: float = Vector2(cur_cell).distance_to(Vector2(billboard_cell))
+	if dist <= 2.5:
+		_check_billboard_rumors(22, true)
 
 
 ## 社交互動行為 (防重疊、獨立站位、距離防呆、互斥鎖定)
@@ -1284,6 +1315,7 @@ func _step_move(step_index: int, on_complete: Callable) -> void:
 	_move_tween.set_speed_scale(cur_scale)
 	_move_tween.tween_property(self, "global_position", next_pos, step_duration)
 	_move_tween.tween_callback(func():
+		_check_passing_by_billboard(next_cell)
 		_step_move(step_index + 1, on_complete)
 	)
 

@@ -1566,7 +1566,8 @@ enum State {
 - **公開方法 (Public Methods)**：
   - `set_bubble_frame(frame_index: int) -> void`：**[保留接口]** 預留未來切換 Sprite2D / AnimatedSprite2D 氣泡圖集不同 frame 幀數的調用點。
   - `show_speech_bubble(text: String, duration: float = 2.5, bubble_frame: int = -1) -> void`：顯示文字氣泡，若指定 `bubble_frame` 則透過保留接口切換幀數。
-  - `_check_billboard_rumors(poi_id: int) -> void`：當居民抵達專屬布告欄 (POI 22: 小鎮布告欄) 或 廣場 (POI 20) / 商店 (POI 12) 時，主動閱讀布告欄獲得第 1 代 (G1) 情報（抵達 POI 22 時閱讀率為 100%，路過為 35%）。
+  - `_check_billboard_rumors(poi_id: int = 22, is_passing_by: bool = false) -> void`：當居民專程抵達專屬布告欄 (POI 22) 或在世界移動中**物理路過布告欄周遭** (距離 $\le 2.5$ 格) 時觸發。專程前往閱讀率為 100%，路過時為 65% 並具備 30 ticks 冷卻防抖，徹底移除在無關設施 (如 POI 20 廣場、POI 12 商店) 的遠端隔空讀取。
+  - `_check_passing_by_billboard(cur_cell: Vector2i) -> void`：移動步伐中與週期巡視時檢測當前網格座標與 POI 22 的距離，實現動態路過閱覽情報機制。
 
 ### 16.5 全鎮情報傳播拓撲驗證面板：`RumorPropagationDialog` (`scripts/ui/rumor_propagation_dialog.gd`)
 
